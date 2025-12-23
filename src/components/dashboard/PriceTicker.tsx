@@ -96,22 +96,16 @@ export function PriceTicker({ data, isLoading }: PriceTickerProps) {
                     {priceChangePercent.toFixed(2)}%
                   </span>
                 </div>
-                <Badge 
-                  variant="outline" 
-                  className={`text-xs ${isConnected ? "bg-chart-bullish/10 text-chart-bullish border-chart-bullish/30" : "bg-muted text-muted-foreground"}`}
+                <div 
+                  className={`p-1 rounded ${isConnected ? "text-chart-bullish" : "text-muted-foreground"}`}
+                  title={isConnected ? "Live connection" : "Polling mode"}
                 >
                   {isConnected ? (
-                    <>
-                      <Wifi className="h-3 w-3 mr-1" />
-                      Live
-                    </>
+                    <Wifi className="h-4 w-4" />
                   ) : (
-                    <>
-                      <WifiOff className="h-3 w-3 mr-1" />
-                      Polling
-                    </>
+                    <WifiOff className="h-4 w-4" />
                   )}
-                </Badge>
+                </div>
               </div>
               <p className="text-xs text-muted-foreground">BTC/USDT</p>
             </div>
