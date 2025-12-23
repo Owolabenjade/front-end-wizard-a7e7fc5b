@@ -98,9 +98,9 @@ export function DashboardHeader({ onRefresh, isRefetching, lastUpdated }: Dashbo
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           {lastUpdated && (
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs text-muted-foreground hidden sm:block">
               Updated {lastUpdated.toLocaleTimeString()}
             </span>
           )}
@@ -109,20 +109,20 @@ export function DashboardHeader({ onRefresh, isRefetching, lastUpdated }: Dashbo
             size="sm"
             onClick={handleManualScan}
             disabled={isScanning}
-            className="gap-2"
+            className="gap-2 min-h-[44px] min-w-[44px] px-3 sm:px-4 touch-manipulation"
           >
-            <Radar className={`h-4 w-4 ${isScanning ? "animate-pulse" : ""}`} />
-            {isScanning ? "Scanning..." : "Run Scan"}
+            <Radar className={`h-4 w-4 sm:h-5 sm:w-5 ${isScanning ? "animate-pulse" : ""}`} />
+            <span className="hidden sm:inline">{isScanning ? "Scanning..." : "Run Scan"}</span>
           </Button>
           <Button
             variant="outline"
             size="sm"
             onClick={onRefresh}
             disabled={isRefetching}
-            className="gap-2"
+            className="gap-2 min-h-[44px] min-w-[44px] px-3 sm:px-4 touch-manipulation"
           >
-            <RefreshCw className={`h-4 w-4 ${isRefetching ? "animate-spin" : ""}`} />
-            Refresh
+            <RefreshCw className={`h-4 w-4 sm:h-5 sm:w-5 ${isRefetching ? "animate-spin" : ""}`} />
+            <span className="hidden sm:inline">Refresh</span>
           </Button>
         </div>
       </header>
