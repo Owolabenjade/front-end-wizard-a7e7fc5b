@@ -11,7 +11,7 @@ import { SignalsPanel } from "@/components/dashboard/SignalsPanel";
 import { EditableSettingsPanel } from "@/components/dashboard/EditableSettingsPanel";
 import { TradeHistoryPanel } from "@/components/dashboard/TradeHistoryPanel";
 import { StatsPanel } from "@/components/dashboard/StatsPanel";
-
+import { BacktestPanel } from "@/components/dashboard/BacktestPanel";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 
@@ -90,13 +90,18 @@ const Index = () => {
           </div>
         </div>
 
-        {/* Stats & History Row */}
+        {/* Backtest & History Row */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          <BacktestPanel data={data} isLoading={isLoading} />
+          <TradeHistoryPanel />
+        </div>
+
+        {/* Stats & Settings Row */}
         <div className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2">
-            <TradeHistoryPanel />
-          </div>
-          <div className="space-y-6">
             <StatsPanel />
+          </div>
+          <div>
             <EditableSettingsPanel />
           </div>
         </div>
