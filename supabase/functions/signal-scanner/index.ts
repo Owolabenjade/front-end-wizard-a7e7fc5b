@@ -455,8 +455,24 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Determine scan type from request body or default to cron
+  let scanType = "cron";
   try {
-    console.log("Signal scanner started...");
+    const body = await req.json().catch(() => ({}));
+    if (body.scanType === "manual") {
+      scanType = "manual";
+    }
+  } catch {
+    // Default to cron if no body
+  }
+
+  // Initialize Supabase client early for logging
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
+  try {
+    console.log(`Signal scanner started (${scanType})...`);
     
     // Fetch market data from Binance
     const interval = "1h";
@@ -490,16 +506,25 @@ serve(async (req) => {
     console.log(`Detected ${detectedSignals.length} signals`);
     
     if (detectedSignals.length === 0) {
+      // Log scan with no signals
+      await supabase.from("scan_history").insert({
+        scan_type: scanType,
+        signals_detected: 0,
+        signals_saved: 0,
+        status: "success",
+      });
+
       return new Response(
-        JSON.stringify({ success: true, message: "No signals detected", signalsProcessed: 0 }),
+        JSON.stringify({ 
+          success: true, 
+          message: "No signals detected", 
+          signalsDetected: 0,
+          signalsSaved: 0,
+          scanType 
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    
-    // Initialize Supabase client
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
     
     // Get current candle data for TP/SL checking
     const currentCandle = candles[candles.length - 1];
@@ -674,18 +699,38 @@ serve(async (req) => {
     
     console.log(`Scan complete: ${newSignalsCount} new signals, ${notificationsSent} notifications sent`);
     
+    // Log successful scan
+    await supabase.from("scan_history").insert({
+      scan_type: scanType,
+      signals_detected: detectedSignals.length,
+      signals_saved: newSignalsCount,
+      status: "success",
+    });
+    
     return new Response(
       JSON.stringify({ 
         success: true, 
         message: `Processed ${detectedSignals.length} signals`,
-        newSignals: newSignalsCount,
-        notificationsSent 
+        signalsDetected: detectedSignals.length,
+        signalsSaved: newSignalsCount,
+        notificationsSent,
+        scanType
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
     
   } catch (error) {
     console.error("Error in signal-scanner:", error);
+    
+    // Log failed scan
+    await supabase.from("scan_history").insert({
+      scan_type: scanType,
+      signals_detected: 0,
+      signals_saved: 0,
+      status: "error",
+      error_message: String(error),
+    });
+    
     return new Response(
       JSON.stringify({ success: false, error: String(error) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

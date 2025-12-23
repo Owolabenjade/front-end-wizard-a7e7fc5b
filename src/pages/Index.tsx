@@ -11,6 +11,7 @@ import { EditableSettingsPanel } from "@/components/dashboard/EditableSettingsPa
 import { TradeHistoryPanel } from "@/components/dashboard/TradeHistoryPanel";
 import { StatsPanel } from "@/components/dashboard/StatsPanel";
 import { BacktestPanel } from "@/components/dashboard/BacktestPanel";
+import { ScanHistoryPanel } from "@/components/dashboard/ScanHistoryPanel";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 
@@ -94,10 +95,13 @@ const Index = () => {
           <TradeHistoryPanel />
         </div>
 
-        {/* Stats & Settings Row */}
+        {/* Stats, Settings & Scan History Row */}
         <div className="grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2">
+          <div>
             <StatsPanel />
+          </div>
+          <div>
+            <ScanHistoryPanel />
           </div>
           <div>
             <EditableSettingsPanel />
