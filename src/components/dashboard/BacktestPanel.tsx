@@ -197,8 +197,9 @@ export function BacktestPanel({ data, isLoading }: BacktestPanelProps) {
                 <Input
                   type="number"
                   value={config.maxHoldingPeriod}
-                  onChange={(e) => updateConfig({ maxHoldingPeriod: Number(e.target.value) })}
-                  className="h-8 text-sm"
+                  disabled
+                  className="h-8 text-sm bg-muted cursor-not-allowed"
+                  title="Fixed at 36 candles for optimal performance"
                 />
               </div>
               <div className="space-y-2">

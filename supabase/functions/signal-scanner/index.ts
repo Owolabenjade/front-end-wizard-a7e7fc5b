@@ -6,6 +6,11 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Hardcoded optimal max holding period: 36 candles (36 hours on 1h timeframe)
+// This prevents capital from being locked in stagnant trades
+const MAX_HOLDING_PERIOD_CANDLES = 36;
+const CANDLE_DURATION_MS = 60 * 60 * 1000; // 1 hour in milliseconds
+
 interface Candle {
   time: number;
   open: number;
@@ -366,6 +371,41 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    // Expire stale signals that exceeded max holding period (36 candles)
+    const maxHoldingMs = MAX_HOLDING_PERIOD_CANDLES * CANDLE_DURATION_MS;
+    const expirationCutoff = new Date(Date.now() - maxHoldingMs).toISOString();
+    
+    const { data: expiredSignals, error: expireQueryError } = await supabase
+      .from("trade_signals")
+      .select("id, entry_price, direction")
+      .eq("status", "active")
+      .lt("detected_at", expirationCutoff);
+    
+    if (expiredSignals && expiredSignals.length > 0) {
+      const currentPrice = candles[candles.length - 1].close;
+      
+      for (const expiredSignal of expiredSignals) {
+        const entryPrice = Number(expiredSignal.entry_price);
+        const pnlPercent = expiredSignal.direction === "long"
+          ? ((currentPrice - entryPrice) / entryPrice) * 100
+          : ((entryPrice - currentPrice) / entryPrice) * 100;
+        
+        await supabase
+          .from("trade_signals")
+          .update({
+            status: "expired",
+            closed_at: new Date().toISOString(),
+            close_price: currentPrice,
+            pnl_percent: pnlPercent,
+          })
+          .eq("id", expiredSignal.id);
+        
+        console.log(`Expired signal ${expiredSignal.id} after ${MAX_HOLDING_PERIOD_CANDLES} candles. P&L: ${pnlPercent.toFixed(2)}%`);
+      }
+      
+      console.log(`Expired ${expiredSignals.length} stale signals (max holding: ${MAX_HOLDING_PERIOD_CANDLES} candles)`);
+    }
     
     // Check for recent signals to avoid duplicates (within last hour)
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
