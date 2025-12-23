@@ -45,6 +45,9 @@ export interface BacktestConfig {
   maxHoldingPeriod: number; // in candles
 }
 
+// Hardcoded optimal holding period matching signal-scanner (not user-configurable)
+const OPTIMAL_HOLDING_PERIOD = 36;
+
 const DEFAULT_CONFIG: BacktestConfig = {
   initialBalance: 10000,
   stopLossPercent: 2,
@@ -57,7 +60,7 @@ const DEFAULT_CONFIG: BacktestConfig = {
   },
   rsiOversold: 30,
   rsiOverbought: 70,
-  maxHoldingPeriod: 24, // 24 candles
+  maxHoldingPeriod: OPTIMAL_HOLDING_PERIOD, // Fixed at 36 candles
 };
 
 function detectSignalAtIndex(
