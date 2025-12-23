@@ -12,7 +12,6 @@ import { TradeHistoryPanel } from "@/components/dashboard/TradeHistoryPanel";
 import { StatsPanel } from "@/components/dashboard/StatsPanel";
 import { BacktestPanel } from "@/components/dashboard/BacktestPanel";
 import { ScanHistoryPanel } from "@/components/dashboard/ScanHistoryPanel";
-import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 
 const Index = () => {
@@ -51,7 +50,6 @@ const Index = () => {
             </div>
           </div>
         </div>
-        <Toaster />
       </div>
     );
   }
@@ -108,7 +106,6 @@ const Index = () => {
           </div>
         </div>
       </div>
-      <Toaster />
     </div>
   );
 };
