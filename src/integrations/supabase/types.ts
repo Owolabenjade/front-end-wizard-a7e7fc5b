@@ -14,7 +14,90 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      bot_settings: {
+        Row: {
+          description: string | null
+          id: string
+          setting_key: string
+          setting_value: Json
+          updated_at: string
+        }
+        Insert: {
+          description?: string | null
+          id?: string
+          setting_key: string
+          setting_value: Json
+          updated_at?: string
+        }
+        Update: {
+          description?: string | null
+          id?: string
+          setting_key?: string
+          setting_value?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      trade_signals: {
+        Row: {
+          close_price: number | null
+          closed_at: string | null
+          confidence: number
+          created_at: string
+          detected_at: string
+          direction: Database["public"]["Enums"]["signal_direction"]
+          entry_price: number
+          id: string
+          pnl_percent: number | null
+          reason: string
+          risk_reward: number
+          status: Database["public"]["Enums"]["signal_status"]
+          stop_loss: number
+          strategy: Database["public"]["Enums"]["signal_type"]
+          take_profit: number
+          timeframe: string
+          triggered_at: string | null
+        }
+        Insert: {
+          close_price?: number | null
+          closed_at?: string | null
+          confidence: number
+          created_at?: string
+          detected_at?: string
+          direction: Database["public"]["Enums"]["signal_direction"]
+          entry_price: number
+          id?: string
+          pnl_percent?: number | null
+          reason: string
+          risk_reward: number
+          status?: Database["public"]["Enums"]["signal_status"]
+          stop_loss: number
+          strategy: Database["public"]["Enums"]["signal_type"]
+          take_profit: number
+          timeframe?: string
+          triggered_at?: string | null
+        }
+        Update: {
+          close_price?: number | null
+          closed_at?: string | null
+          confidence?: number
+          created_at?: string
+          detected_at?: string
+          direction?: Database["public"]["Enums"]["signal_direction"]
+          entry_price?: number
+          id?: string
+          pnl_percent?: number | null
+          reason?: string
+          risk_reward?: number
+          status?: Database["public"]["Enums"]["signal_status"]
+          stop_loss?: number
+          strategy?: Database["public"]["Enums"]["signal_type"]
+          take_profit?: number
+          timeframe?: string
+          triggered_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +106,13 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      signal_direction: "long" | "short"
+      signal_status: "active" | "triggered" | "expired" | "cancelled"
+      signal_type:
+        | "ema_bounce"
+        | "macd_cross"
+        | "rsi_reversal"
+        | "bollinger_breakout"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +239,15 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      signal_direction: ["long", "short"],
+      signal_status: ["active", "triggered", "expired", "cancelled"],
+      signal_type: [
+        "ema_bounce",
+        "macd_cross",
+        "rsi_reversal",
+        "bollinger_breakout",
+      ],
+    },
   },
 } as const
