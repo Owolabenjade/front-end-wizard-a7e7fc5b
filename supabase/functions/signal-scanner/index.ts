@@ -262,7 +262,7 @@ function detectSignals(candles: Candle[], ema21: number[], ema50: number[], ema2
   return signals;
 }
 
-// Send Telegram notification
+// Send Telegram notification for new signal
 async function sendTelegramNotification(signal: SignalResult): Promise<boolean> {
   const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
   const chatId = Deno.env.get("TELEGRAM_CHAT_ID");
@@ -293,6 +293,8 @@ ${directionEmoji}
 🎯 *Take Profit:* $${signal.takeProfit.toLocaleString()}
 📈 *Risk/Reward:* ${signal.riskReward.toFixed(2)}
 
+⏱️ *Max Hold:* ${MAX_HOLDING_PERIOD_CANDLES} candles (${MAX_HOLDING_PERIOD_CANDLES}h)
+
 📝 *Reason:* ${signal.reason}
 
 ⏰ ${new Date().toUTCString()}
@@ -317,6 +319,64 @@ ${directionEmoji}
     return result.ok;
   } catch (error) {
     console.error("Error sending Telegram notification:", error);
+    return false;
+  }
+}
+
+// Send Telegram notification for expired trade
+async function sendExpiredTradeNotification(
+  direction: string,
+  entryPrice: number,
+  currentPrice: number,
+  pnlPercent: number
+): Promise<boolean> {
+  const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
+  const chatId = Deno.env.get("TELEGRAM_CHAT_ID");
+
+  if (!botToken || !chatId) {
+    return false;
+  }
+
+  const isProfit = pnlPercent > 0;
+  const pnlEmoji = isProfit ? "✅" : pnlPercent === 0 ? "⚪" : "❌";
+  const statusText = isProfit ? "PROFIT" : pnlPercent === 0 ? "BREAKEVEN" : "LOSS";
+  const directionEmoji = direction === "long" ? "🟢" : "🔴";
+
+  const message = `
+⏱️ *TRADE EXPIRED - EXIT NOW*
+
+${pnlEmoji} *${statusText}*
+
+${directionEmoji} ${direction.toUpperCase()} position timed out after ${MAX_HOLDING_PERIOD_CANDLES} candles.
+
+💰 *Entry:* $${entryPrice.toLocaleString()}
+📍 *Current:* $${currentPrice.toLocaleString()}
+${isProfit ? "📈" : "📉"} *P&L:* ${pnlPercent >= 0 ? "+" : ""}${pnlPercent.toFixed(2)}%
+
+⚠️ *Action Required:* Close this position manually.
+
+⏰ ${new Date().toUTCString()}
+`.trim();
+
+  try {
+    const response = await fetch(
+      `https://api.telegram.org/bot${botToken}/sendMessage`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: message,
+          parse_mode: "Markdown",
+        }),
+      }
+    );
+
+    const result = await response.json();
+    console.log("Expired trade notification sent:", result.ok);
+    return result.ok;
+  } catch (error) {
+    console.error("Error sending expired trade notification:", error);
     return false;
   }
 }
@@ -400,6 +460,14 @@ serve(async (req) => {
             pnl_percent: pnlPercent,
           })
           .eq("id", expiredSignal.id);
+        
+        // Send Telegram notification for expired trade
+        await sendExpiredTradeNotification(
+          expiredSignal.direction,
+          entryPrice,
+          currentPrice,
+          pnlPercent
+        );
         
         console.log(`Expired signal ${expiredSignal.id} after ${MAX_HOLDING_PERIOD_CANDLES} candles. P&L: ${pnlPercent.toFixed(2)}%`);
       }
