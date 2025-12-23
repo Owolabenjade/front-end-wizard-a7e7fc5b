@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useMarketData } from "@/hooks/useMarketData";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { TimeInterval } from "@/types/trading";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
+import { DashboardSkeleton } from "@/components/dashboard/DashboardSkeleton";
 import { PriceTicker } from "@/components/dashboard/PriceTicker";
 import { PriceChart } from "@/components/dashboard/PriceChart";
 import { IndicatorsPanel } from "@/components/dashboard/IndicatorsPanel";
@@ -13,19 +15,42 @@ import { StatsPanel } from "@/components/dashboard/StatsPanel";
 import { BacktestPanel } from "@/components/dashboard/BacktestPanel";
 import { ScanHistoryPanel } from "@/components/dashboard/ScanHistoryPanel";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 const Index = () => {
   const [interval, setInterval] = useState<TimeInterval>("1h");
   const { data, isLoading, isError, refetch, isRefetching, dataUpdatedAt } = useMarketData(interval);
 
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(() => {
     refetch();
     toast.success("Refreshing market data...");
-  };
+  }, [refetch]);
 
-  const handleIntervalChange = (newInterval: TimeInterval) => {
+  const handleIntervalChange = useCallback((newInterval: TimeInterval) => {
     setInterval(newInterval);
-  };
+  }, []);
+
+  const handleScan = useCallback(async () => {
+    try {
+      await supabase.functions.invoke('signal-scanner', {
+        body: { scanType: 'manual' }
+      });
+    } catch (error) {
+      console.error('Keyboard scan error:', error);
+    }
+  }, []);
+
+  // Enable keyboard shortcuts
+  useKeyboardShortcuts({
+    onRefresh: handleRefresh,
+    onIntervalChange: handleIntervalChange,
+    onScan: handleScan,
+  });
+
+  // Show skeleton during initial load
+  if (isLoading && !data) {
+    return <DashboardSkeleton />;
+  }
 
   if (isError) {
     return (
@@ -43,7 +68,7 @@ const Index = () => {
               </p>
               <button
                 onClick={handleRefresh}
-                className="text-primary hover:underline"
+                className="text-primary hover:underline min-h-[44px] min-w-[44px] px-4"
               >
                 Try again
               </button>
@@ -104,6 +129,11 @@ const Index = () => {
           <div>
             <EditableSettingsPanel />
           </div>
+        </div>
+
+        {/* Keyboard shortcuts hint */}
+        <div className="text-center text-xs text-muted-foreground pb-4">
+          Press <kbd className="px-1.5 py-0.5 rounded bg-muted font-mono">?</kbd> for keyboard shortcuts
         </div>
       </div>
     </div>

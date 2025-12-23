@@ -165,7 +165,7 @@ export function PriceChart({ data, isLoading, interval, onIntervalChange }: Pric
                   key={int.value}
                   variant={interval === int.value ? "secondary" : "ghost"}
                   size="sm"
-                  className="h-7 px-2 sm:px-3 text-xs"
+                  className="min-h-[44px] min-w-[44px] px-3 sm:px-4 text-xs sm:text-sm touch-manipulation"
                   onClick={() => onIntervalChange(int.value)}
                 >
                   {int.label}
@@ -177,7 +177,7 @@ export function PriceChart({ data, isLoading, interval, onIntervalChange }: Pric
             <Button
               variant={showEMAs ? "secondary" : "ghost"}
               size="sm"
-              className="h-7 px-2 sm:px-3 text-xs"
+              className="min-h-[44px] min-w-[44px] px-3 sm:px-4 text-xs sm:text-sm touch-manipulation"
               onClick={() => setShowEMAs(!showEMAs)}
             >
               EMAs
@@ -185,7 +185,7 @@ export function PriceChart({ data, isLoading, interval, onIntervalChange }: Pric
             <Button
               variant={showBB ? "secondary" : "ghost"}
               size="sm"
-              className="h-7 px-2 sm:px-3 text-xs"
+              className="min-h-[44px] min-w-[44px] px-3 sm:px-4 text-xs sm:text-sm touch-manipulation"
               onClick={() => setShowBB(!showBB)}
             >
               BB
