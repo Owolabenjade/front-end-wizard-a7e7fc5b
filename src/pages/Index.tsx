@@ -11,6 +11,7 @@ import { SignalsPanel } from "@/components/dashboard/SignalsPanel";
 import { SettingsPanel } from "@/components/dashboard/SettingsPanel";
 import { TradeHistoryPanel } from "@/components/dashboard/TradeHistoryPanel";
 import { StatsPanel } from "@/components/dashboard/StatsPanel";
+import { TelegramPanel } from "@/components/dashboard/TelegramPanel";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 
@@ -96,6 +97,7 @@ const Index = () => {
           </div>
           <div className="space-y-6">
             <StatsPanel />
+            <TelegramPanel />
             <SettingsPanel />
           </div>
         </div>
