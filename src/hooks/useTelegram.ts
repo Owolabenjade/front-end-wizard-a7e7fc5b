@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { TradeSignal } from "@/lib/signalDetection";
+import { StoredSignal } from "@/hooks/useTradeSignals";
 
 interface TelegramResponse {
   success: boolean;
@@ -9,20 +9,20 @@ interface TelegramResponse {
 
 export const useTelegramNotify = () => {
   return useMutation({
-    mutationFn: async (signal: TradeSignal): Promise<TelegramResponse> => {
+    mutationFn: async (signal: StoredSignal): Promise<TelegramResponse> => {
       const { data, error } = await supabase.functions.invoke("telegram-notify", {
         body: {
           type: "signal",
           signal: {
             strategy: signal.strategy,
             direction: signal.direction,
-            confidence: signal.confidence === "high" ? 90 : signal.confidence === "medium" ? 70 : 50,
-            entryPrice: signal.entryPrice,
-            stopLoss: signal.stopLoss,
-            takeProfit: signal.takeProfit,
-            riskReward: (signal.takeProfit - signal.entryPrice) / (signal.entryPrice - signal.stopLoss),
+            confidence: signal.confidence,
+            entryPrice: signal.entry_price,
+            stopLoss: signal.stop_loss,
+            takeProfit: signal.take_profit,
+            riskReward: signal.risk_reward,
             reason: signal.reason,
-            timeframe: "1h",
+            timeframe: signal.timeframe,
           },
         },
       });

@@ -46,6 +46,32 @@ export const useTradeSignals = (limit = 50) => {
   });
 };
 
+export const useActiveSignals = () => {
+  return useQuery({
+    queryKey: ["active-signals"],
+    queryFn: async (): Promise<StoredSignal[]> => {
+      const { data, error } = await supabase
+        .from("trade_signals")
+        .select("*")
+        .eq("status", "active")
+        .order("detected_at", { ascending: false });
+
+      if (error) throw error;
+      
+      return (data || []).map(row => ({
+        ...row,
+        entry_price: Number(row.entry_price),
+        stop_loss: Number(row.stop_loss),
+        take_profit: Number(row.take_profit),
+        risk_reward: Number(row.risk_reward),
+        close_price: row.close_price ? Number(row.close_price) : null,
+        pnl_percent: row.pnl_percent ? Number(row.pnl_percent) : null,
+      }));
+    },
+    refetchInterval: 15000, // Refresh every 15 seconds for active signals
+  });
+};
+
 export const useSignalStats = () => {
   return useQuery({
     queryKey: ["signal-stats"],

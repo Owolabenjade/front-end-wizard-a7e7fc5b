@@ -1,16 +1,13 @@
-import { Zap, TrendingUp, TrendingDown } from "lucide-react";
+import { Zap, TrendingUp, TrendingDown, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SignalCard } from "./SignalCard";
-import { TradeSignal } from "@/lib/signalDetection";
+import { useActiveSignals, StoredSignal } from "@/hooks/useTradeSignals";
+import { ActiveSignalCard } from "./ActiveSignalCard";
 
-interface SignalsPanelProps {
-  signals: TradeSignal[];
-  isLoading: boolean;
-}
+export function SignalsPanel() {
+  const { data: signals, isLoading, isRefetching } = useActiveSignals();
 
-export function SignalsPanel({ signals, isLoading }: SignalsPanelProps) {
   if (isLoading) {
     return (
       <Card className="border-border/50 bg-card/50 backdrop-blur">
@@ -25,9 +22,10 @@ export function SignalsPanel({ signals, isLoading }: SignalsPanelProps) {
     );
   }
 
-  const longSignals = signals.filter(s => s.direction === "long");
-  const shortSignals = signals.filter(s => s.direction === "short");
-  const highConfidenceCount = signals.filter(s => s.confidence === "high").length;
+  const activeSignals = signals || [];
+  const longSignals = activeSignals.filter(s => s.direction === "long");
+  const shortSignals = activeSignals.filter(s => s.direction === "short");
+  const highConfidenceCount = activeSignals.filter(s => s.confidence >= 80).length;
 
   return (
     <Card className="border-border/50 bg-card/50 backdrop-blur animate-slide-up">
@@ -36,9 +34,12 @@ export function SignalsPanel({ signals, isLoading }: SignalsPanelProps) {
           <div className="flex items-center gap-2">
             <Zap className="h-4 w-4 text-warning" />
             <CardTitle className="text-base font-medium">Active Signals</CardTitle>
+            {isRefetching && (
+              <RefreshCw className="h-3 w-3 text-muted-foreground animate-spin" />
+            )}
           </div>
           <div className="flex items-center gap-2">
-            {signals.length > 0 ? (
+            {activeSignals.length > 0 ? (
               <>
                 <Badge variant="outline" className="border-bullish/50 text-bullish gap-1">
                   <TrendingUp className="h-3 w-3" />
@@ -63,22 +64,22 @@ export function SignalsPanel({ signals, isLoading }: SignalsPanelProps) {
         </div>
       </CardHeader>
       <CardContent>
-        {signals.length === 0 ? (
+        {activeSignals.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <div className="rounded-full bg-muted/50 p-4 mb-4">
               <Zap className="h-8 w-8 text-muted-foreground" />
             </div>
             <p className="text-sm text-muted-foreground mb-1">
-              No trading signals detected
+              No active trading signals
             </p>
             <p className="text-xs text-muted-foreground/70">
-              Signals will appear when market conditions match your trading strategies
+              Signals will appear when the scanner detects opportunities
             </p>
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
-            {signals.map((signal) => (
-              <SignalCard key={signal.id} signal={signal} />
+            {activeSignals.map((signal) => (
+              <ActiveSignalCard key={signal.id} signal={signal} />
             ))}
           </div>
         )}
