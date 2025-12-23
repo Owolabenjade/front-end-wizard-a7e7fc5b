@@ -38,6 +38,36 @@ export type Database = {
         }
         Relationships: []
       }
+      scan_history: {
+        Row: {
+          error_message: string | null
+          executed_at: string
+          id: string
+          scan_type: string
+          signals_detected: number
+          signals_saved: number
+          status: string
+        }
+        Insert: {
+          error_message?: string | null
+          executed_at?: string
+          id?: string
+          scan_type: string
+          signals_detected?: number
+          signals_saved?: number
+          status: string
+        }
+        Update: {
+          error_message?: string | null
+          executed_at?: string
+          id?: string
+          scan_type?: string
+          signals_detected?: number
+          signals_saved?: number
+          status?: string
+        }
+        Relationships: []
+      }
       trade_signals: {
         Row: {
           close_price: number | null
