@@ -1,1 +1,4 @@
 project_id = "mwpoiakaatjtonwxzlra"
+
+[functions.signal-scanner]
+verify_jwt = false
