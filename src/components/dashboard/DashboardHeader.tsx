@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface DashboardHeaderProps {
   onRefresh: () => void;
@@ -104,6 +105,7 @@ export function DashboardHeader({ onRefresh, isRefetching, lastUpdated }: Dashbo
               Updated {lastUpdated.toLocaleTimeString()}
             </span>
           )}
+          <ThemeToggle />
           <Button
             variant="outline"
             size="sm"
