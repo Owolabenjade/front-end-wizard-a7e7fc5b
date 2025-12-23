@@ -8,7 +8,7 @@ import { PriceChart } from "@/components/dashboard/PriceChart";
 import { IndicatorsPanel } from "@/components/dashboard/IndicatorsPanel";
 import { EMAIndicators } from "@/components/dashboard/EMAIndicators";
 import { SignalsPanel } from "@/components/dashboard/SignalsPanel";
-import { SettingsPanel } from "@/components/dashboard/SettingsPanel";
+import { EditableSettingsPanel } from "@/components/dashboard/EditableSettingsPanel";
 import { TradeHistoryPanel } from "@/components/dashboard/TradeHistoryPanel";
 import { StatsPanel } from "@/components/dashboard/StatsPanel";
 import { TelegramPanel } from "@/components/dashboard/TelegramPanel";
@@ -98,7 +98,7 @@ const Index = () => {
           <div className="space-y-6">
             <StatsPanel />
             <TelegramPanel />
-            <SettingsPanel />
+            <EditableSettingsPanel />
           </div>
         </div>
       </div>
