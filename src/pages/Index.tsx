@@ -8,6 +8,9 @@ import { PriceChart } from "@/components/dashboard/PriceChart";
 import { IndicatorsPanel } from "@/components/dashboard/IndicatorsPanel";
 import { EMAIndicators } from "@/components/dashboard/EMAIndicators";
 import { SignalsPanel } from "@/components/dashboard/SignalsPanel";
+import { SettingsPanel } from "@/components/dashboard/SettingsPanel";
+import { TradeHistoryPanel } from "@/components/dashboard/TradeHistoryPanel";
+import { StatsPanel } from "@/components/dashboard/StatsPanel";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 
@@ -83,6 +86,17 @@ const Index = () => {
           </div>
           <div>
             <EMAIndicators data={data} isLoading={isLoading} />
+          </div>
+        </div>
+
+        {/* Stats & History Row */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <TradeHistoryPanel />
+          </div>
+          <div className="space-y-6">
+            <StatsPanel />
+            <SettingsPanel />
           </div>
         </div>
       </div>
