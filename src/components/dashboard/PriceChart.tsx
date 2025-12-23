@@ -146,9 +146,9 @@ export function PriceChart({ data, isLoading, interval, onIntervalChange }: Pric
   return (
     <Card className="border-border/50 bg-card/50 backdrop-blur animate-slide-up">
       <CardHeader className="pb-2">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <CardTitle className="text-lg">Price Chart</CardTitle>
+            <CardTitle className="text-base sm:text-lg">Price Chart</CardTitle>
             {lastCandle && (
               <Badge variant="outline" className={isUp ? "border-bullish/50 text-bullish" : "border-bearish/50 text-bearish"}>
                 {isUp ? <TrendingUp className="mr-1 h-3 w-3" /> : <TrendingDown className="mr-1 h-3 w-3" />}
@@ -157,7 +157,7 @@ export function PriceChart({ data, isLoading, interval, onIntervalChange }: Pric
             )}
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {/* Interval buttons */}
             <div className="flex rounded-md border border-border">
               {intervals.map((int) => (
@@ -165,7 +165,7 @@ export function PriceChart({ data, isLoading, interval, onIntervalChange }: Pric
                   key={int.value}
                   variant={interval === int.value ? "secondary" : "ghost"}
                   size="sm"
-                  className="h-7 px-3 text-xs"
+                  className="h-7 px-2 sm:px-3 text-xs"
                   onClick={() => onIntervalChange(int.value)}
                 >
                   {int.label}
@@ -177,7 +177,7 @@ export function PriceChart({ data, isLoading, interval, onIntervalChange }: Pric
             <Button
               variant={showEMAs ? "secondary" : "ghost"}
               size="sm"
-              className="h-7 px-3 text-xs"
+              className="h-7 px-2 sm:px-3 text-xs"
               onClick={() => setShowEMAs(!showEMAs)}
             >
               EMAs
@@ -185,7 +185,7 @@ export function PriceChart({ data, isLoading, interval, onIntervalChange }: Pric
             <Button
               variant={showBB ? "secondary" : "ghost"}
               size="sm"
-              className="h-7 px-3 text-xs"
+              className="h-7 px-2 sm:px-3 text-xs"
               onClick={() => setShowBB(!showBB)}
             >
               BB
@@ -193,8 +193,8 @@ export function PriceChart({ data, isLoading, interval, onIntervalChange }: Pric
           </div>
         </div>
       </CardHeader>
-      <CardContent>
-        <div className="h-[400px] w-full">
+      <CardContent className="px-2 sm:px-6">
+        <div className="h-[300px] sm:h-[400px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <XAxis 

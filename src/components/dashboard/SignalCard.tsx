@@ -60,27 +60,27 @@ export function SignalCard({ signal }: SignalCardProps) {
       </CardHeader>
       <CardContent className="space-y-3">
         {/* Price Levels */}
-        <div className="grid grid-cols-3 gap-3">
-          <div className="rounded-lg bg-secondary/50 p-2">
-            <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
-              <Target className="h-3 w-3" />
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          <div className="rounded-lg bg-secondary/50 p-1.5 sm:p-2">
+            <div className="flex items-center gap-1 text-[10px] sm:text-xs text-muted-foreground mb-0.5 sm:mb-1">
+              <Target className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
               Entry
             </div>
-            <p className="text-sm font-mono font-medium">{formatPrice(signal.entryPrice)}</p>
+            <p className="text-xs sm:text-sm font-mono font-medium">{formatPrice(signal.entryPrice)}</p>
           </div>
-          <div className="rounded-lg bg-bearish/10 p-2">
-            <div className="flex items-center gap-1 text-xs text-bearish mb-1">
-              <Shield className="h-3 w-3" />
-              Stop Loss
+          <div className="rounded-lg bg-bearish/10 p-1.5 sm:p-2">
+            <div className="flex items-center gap-1 text-[10px] sm:text-xs text-bearish mb-0.5 sm:mb-1">
+              <Shield className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+              SL
             </div>
-            <p className="text-sm font-mono font-medium text-bearish">{formatPrice(signal.stopLoss)}</p>
+            <p className="text-xs sm:text-sm font-mono font-medium text-bearish">{formatPrice(signal.stopLoss)}</p>
           </div>
-          <div className="rounded-lg bg-bullish/10 p-2">
-            <div className="flex items-center gap-1 text-xs text-bullish mb-1">
-              <Target className="h-3 w-3" />
-              Take Profit
+          <div className="rounded-lg bg-bullish/10 p-1.5 sm:p-2">
+            <div className="flex items-center gap-1 text-[10px] sm:text-xs text-bullish mb-0.5 sm:mb-1">
+              <Target className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+              TP
             </div>
-            <p className="text-sm font-mono font-medium text-bullish">{formatPrice(signal.takeProfit)}</p>
+            <p className="text-xs sm:text-sm font-mono font-medium text-bullish">{formatPrice(signal.takeProfit)}</p>
           </div>
         </div>
 

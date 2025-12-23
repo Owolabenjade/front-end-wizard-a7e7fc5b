@@ -381,6 +381,75 @@ ${isProfit ? "📈" : "📉"} *P&L:* ${pnlPercent >= 0 ? "+" : ""}${pnlPercent.t
   }
 }
 
+// Send Telegram notification for TP/SL hit
+async function sendTPSLHitNotification(
+  hitType: "take_profit" | "stop_loss",
+  direction: string,
+  entryPrice: number,
+  hitPrice: number,
+  pnlPercent: number,
+  strategy: string
+): Promise<boolean> {
+  const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
+  const chatId = Deno.env.get("TELEGRAM_CHAT_ID");
+
+  if (!botToken || !chatId) {
+    return false;
+  }
+
+  const isTP = hitType === "take_profit";
+  const hitEmoji = isTP ? "🎯" : "🛑";
+  const statusEmoji = isTP ? "✅" : "❌";
+  const statusText = isTP ? "TAKE PROFIT HIT" : "STOP LOSS HIT";
+  const directionEmoji = direction === "long" ? "🟢" : "🔴";
+  
+  const strategyLabels: Record<string, string> = {
+    ema_bounce: "EMA Bounce",
+    macd_cross: "MACD Cross",
+    rsi_reversal: "RSI Reversal",
+    bollinger_breakout: "Bollinger Breakout",
+  };
+
+  const message = `
+${hitEmoji} *${statusText}*
+
+${statusEmoji} Trade ${isTP ? "WON" : "LOST"}!
+
+${directionEmoji} *Direction:* ${direction.toUpperCase()}
+📊 *Strategy:* ${strategyLabels[strategy] || strategy}
+
+💰 *Entry:* $${entryPrice.toLocaleString()}
+${hitEmoji} *Exit:* $${hitPrice.toLocaleString()}
+${isTP ? "📈" : "📉"} *P&L:* ${pnlPercent >= 0 ? "+" : ""}${pnlPercent.toFixed(2)}%
+
+${isTP ? "🎉 Congratulations!" : "📝 Review the setup for lessons."}
+
+⏰ ${new Date().toUTCString()}
+`.trim();
+
+  try {
+    const response = await fetch(
+      `https://api.telegram.org/bot${botToken}/sendMessage`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: message,
+          parse_mode: "Markdown",
+        }),
+      }
+    );
+
+    const result = await response.json();
+    console.log(`${hitType} notification sent:`, result.ok);
+    return result.ok;
+  } catch (error) {
+    console.error(`Error sending ${hitType} notification:`, error);
+    return false;
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -432,6 +501,81 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
     
+    // Get current candle data for TP/SL checking
+    const currentCandle = candles[candles.length - 1];
+    const currentHigh = currentCandle.high;
+    const currentLow = currentCandle.low;
+    const currentClose = currentCandle.close;
+    
+    // Check for TP/SL hits on active signals
+    const { data: activeSignals, error: activeError } = await supabase
+      .from("trade_signals")
+      .select("id, entry_price, stop_loss, take_profit, direction, strategy")
+      .eq("status", "active");
+    
+    if (activeSignals && activeSignals.length > 0) {
+      console.log(`Checking ${activeSignals.length} active signals for TP/SL hits...`);
+      
+      for (const signal of activeSignals) {
+        const entryPrice = Number(signal.entry_price);
+        const stopLoss = Number(signal.stop_loss);
+        const takeProfit = Number(signal.take_profit);
+        const isLong = signal.direction === "long";
+        
+        let hitType: "take_profit" | "stop_loss" | null = null;
+        let exitPrice = currentClose;
+        
+        if (isLong) {
+          // Long position: TP hit if high >= TP, SL hit if low <= SL
+          if (currentHigh >= takeProfit) {
+            hitType = "take_profit";
+            exitPrice = takeProfit;
+          } else if (currentLow <= stopLoss) {
+            hitType = "stop_loss";
+            exitPrice = stopLoss;
+          }
+        } else {
+          // Short position: TP hit if low <= TP, SL hit if high >= SL
+          if (currentLow <= takeProfit) {
+            hitType = "take_profit";
+            exitPrice = takeProfit;
+          } else if (currentHigh >= stopLoss) {
+            hitType = "stop_loss";
+            exitPrice = stopLoss;
+          }
+        }
+        
+        if (hitType) {
+          const pnlPercent = isLong
+            ? ((exitPrice - entryPrice) / entryPrice) * 100
+            : ((entryPrice - exitPrice) / entryPrice) * 100;
+          
+          await supabase
+            .from("trade_signals")
+            .update({
+              status: "triggered",
+              triggered_at: new Date().toISOString(),
+              closed_at: new Date().toISOString(),
+              close_price: exitPrice,
+              pnl_percent: pnlPercent,
+            })
+            .eq("id", signal.id);
+          
+          // Send TP/SL hit notification
+          await sendTPSLHitNotification(
+            hitType,
+            signal.direction,
+            entryPrice,
+            exitPrice,
+            pnlPercent,
+            signal.strategy
+          );
+          
+          console.log(`Signal ${signal.id} ${hitType} hit at $${exitPrice}. P&L: ${pnlPercent.toFixed(2)}%`);
+        }
+      }
+    }
+    
     // Expire stale signals that exceeded max holding period (36 candles)
     const maxHoldingMs = MAX_HOLDING_PERIOD_CANDLES * CANDLE_DURATION_MS;
     const expirationCutoff = new Date(Date.now() - maxHoldingMs).toISOString();
@@ -443,20 +587,18 @@ serve(async (req) => {
       .lt("detected_at", expirationCutoff);
     
     if (expiredSignals && expiredSignals.length > 0) {
-      const currentPrice = candles[candles.length - 1].close;
-      
       for (const expiredSignal of expiredSignals) {
         const entryPrice = Number(expiredSignal.entry_price);
         const pnlPercent = expiredSignal.direction === "long"
-          ? ((currentPrice - entryPrice) / entryPrice) * 100
-          : ((entryPrice - currentPrice) / entryPrice) * 100;
+          ? ((currentClose - entryPrice) / entryPrice) * 100
+          : ((entryPrice - currentClose) / entryPrice) * 100;
         
         await supabase
           .from("trade_signals")
           .update({
             status: "expired",
             closed_at: new Date().toISOString(),
-            close_price: currentPrice,
+            close_price: currentClose,
             pnl_percent: pnlPercent,
           })
           .eq("id", expiredSignal.id);
@@ -465,7 +607,7 @@ serve(async (req) => {
         await sendExpiredTradeNotification(
           expiredSignal.direction,
           entryPrice,
-          currentPrice,
+          currentClose,
           pnlPercent
         );
         
