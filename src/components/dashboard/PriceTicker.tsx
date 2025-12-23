@@ -1,7 +1,10 @@
-import { TrendingUp, TrendingDown, Activity } from "lucide-react";
+import { TrendingUp, TrendingDown, Activity, Wifi, WifiOff } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { MarketData } from "@/types/trading";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { useRealtimePrice } from "@/hooks/useRealtimePrice";
+import { useEffect, useState } from "react";
 
 interface PriceTickerProps {
   data: MarketData | undefined;
@@ -9,7 +12,24 @@ interface PriceTickerProps {
 }
 
 export function PriceTicker({ data, isLoading }: PriceTickerProps) {
-  if (isLoading) {
+  const { data: realtimeData, isConnected } = useRealtimePrice();
+  const [flashClass, setFlashClass] = useState("");
+  const [prevPrice, setPrevPrice] = useState<number | null>(null);
+
+  // Flash effect on price change
+  useEffect(() => {
+    const currentPrice = realtimeData?.price ?? data?.currentPrice;
+    if (prevPrice !== null && currentPrice !== undefined && currentPrice !== prevPrice) {
+      setFlashClass(currentPrice > prevPrice ? "animate-flash-green" : "animate-flash-red");
+      const timeout = setTimeout(() => setFlashClass(""), 300);
+      return () => clearTimeout(timeout);
+    }
+    if (currentPrice !== undefined) {
+      setPrevPrice(currentPrice);
+    }
+  }, [realtimeData?.price, data?.currentPrice, prevPrice]);
+
+  if (isLoading && !realtimeData) {
     return (
       <Card className="border-border/50 bg-card/50 backdrop-blur">
         <CardContent className="p-4">
@@ -24,9 +44,15 @@ export function PriceTicker({ data, isLoading }: PriceTickerProps) {
     );
   }
 
-  if (!data) return null;
+  // Use realtime data if available, fallback to polling data
+  const currentPrice = realtimeData?.price ?? data?.currentPrice ?? 0;
+  const priceChange = realtimeData?.priceChange ?? data?.priceChange24h ?? 0;
+  const priceChangePercent = realtimeData?.priceChangePercent ?? data?.priceChangePercent24h ?? 0;
+  const high24h = realtimeData?.high24h ?? data?.high24h ?? 0;
+  const low24h = realtimeData?.low24h ?? data?.low24h ?? 0;
+  const volume24h = realtimeData?.volume24h ?? data?.volume24h ?? 0;
 
-  const isPositive = data.priceChangePercent24h >= 0;
+  const isPositive = priceChangePercent >= 0;
   const priceColor = isPositive ? "text-bullish" : "text-bearish";
   const TrendIcon = isPositive ? TrendingUp : TrendingDown;
 
@@ -60,16 +86,32 @@ export function PriceTicker({ data, isLoading }: PriceTickerProps) {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-2xl font-bold font-mono tracking-tight">
-                  {formatPrice(data.currentPrice)}
+                <span className={`text-2xl font-bold font-mono tracking-tight transition-colors ${flashClass}`}>
+                  {formatPrice(currentPrice)}
                 </span>
                 <div className={`flex items-center gap-1 ${priceColor}`}>
                   <TrendIcon className="h-4 w-4" />
                   <span className="text-sm font-medium">
                     {isPositive ? "+" : ""}
-                    {data.priceChangePercent24h.toFixed(2)}%
+                    {priceChangePercent.toFixed(2)}%
                   </span>
                 </div>
+                <Badge 
+                  variant="outline" 
+                  className={`text-xs ${isConnected ? "bg-chart-bullish/10 text-chart-bullish border-chart-bullish/30" : "bg-muted text-muted-foreground"}`}
+                >
+                  {isConnected ? (
+                    <>
+                      <Wifi className="h-3 w-3 mr-1" />
+                      Live
+                    </>
+                  ) : (
+                    <>
+                      <WifiOff className="h-3 w-3 mr-1" />
+                      Polling
+                    </>
+                  )}
+                </Badge>
               </div>
               <p className="text-xs text-muted-foreground">BTC/USDT</p>
             </div>
@@ -80,7 +122,7 @@ export function PriceTicker({ data, isLoading }: PriceTickerProps) {
             <p className="text-xs text-muted-foreground mb-0.5">24h Change</p>
             <p className={`text-sm font-mono font-medium ${priceColor}`}>
               {isPositive ? "+" : ""}
-              {formatPrice(data.priceChange24h)}
+              {formatPrice(priceChange)}
             </p>
           </div>
 
@@ -88,7 +130,7 @@ export function PriceTicker({ data, isLoading }: PriceTickerProps) {
           <div className="text-right">
             <p className="text-xs text-muted-foreground mb-0.5">24h High</p>
             <p className="text-sm font-mono font-medium text-bullish">
-              {formatPrice(data.high24h)}
+              {formatPrice(high24h)}
             </p>
           </div>
 
@@ -96,7 +138,7 @@ export function PriceTicker({ data, isLoading }: PriceTickerProps) {
           <div className="text-right">
             <p className="text-xs text-muted-foreground mb-0.5">24h Low</p>
             <p className="text-sm font-mono font-medium text-bearish">
-              {formatPrice(data.low24h)}
+              {formatPrice(low24h)}
             </p>
           </div>
 
@@ -106,7 +148,7 @@ export function PriceTicker({ data, isLoading }: PriceTickerProps) {
             <div className="text-right">
               <p className="text-xs text-muted-foreground mb-0.5">24h Volume</p>
               <p className="text-sm font-mono font-medium">
-                {formatVolume(data.volume24h)} BTC
+                {formatVolume(volume24h)} BTC
               </p>
             </div>
           </div>
