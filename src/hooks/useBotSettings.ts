@@ -42,8 +42,6 @@ interface SettingRow {
 }
 
 export const useBotSettings = () => {
-  const queryClient = useQueryClient();
-
   const query = useQuery({
     queryKey: ["bot-settings"],
     queryFn: async (): Promise<BotSettings> => {
@@ -70,4 +68,25 @@ export const useBotSettings = () => {
   });
 
   return query;
+};
+
+export const useUpdateBotSettings = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ key, value }: { key: keyof BotSettings; value: Record<string, string | number | boolean> }) => {
+      const { error } = await supabase
+        .from("bot_settings")
+        .update({ 
+          setting_value: value as unknown as Record<string, never>,
+          updated_at: new Date().toISOString() 
+        })
+        .eq("setting_key", key);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bot-settings"] });
+    },
+  });
 };
