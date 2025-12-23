@@ -1,17 +1,33 @@
 import { TrendingUp, TrendingDown, Target, Shield, Clock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { TradeSignal, getStrategyLabel, getStrategyColor, getStrategyIcon } from "@/lib/signalDetection";
+import { StoredSignal } from "@/hooks/useTradeSignals";
+import { format } from "date-fns";
 
-interface SignalCardProps {
-  signal: TradeSignal;
+interface ActiveSignalCardProps {
+  signal: StoredSignal;
 }
 
-export function SignalCard({ signal }: SignalCardProps) {
+const strategyLabels: Record<StoredSignal["strategy"], string> = {
+  ema_bounce: "EMA Bounce",
+  macd_cross: "MACD Cross",
+  rsi_reversal: "RSI Reversal",
+  bollinger_breakout: "BB Breakout",
+};
+
+const strategyIcons: Record<StoredSignal["strategy"], string> = {
+  ema_bounce: "📈",
+  macd_cross: "📊",
+  rsi_reversal: "🔄",
+  bollinger_breakout: "💥",
+};
+
+export function ActiveSignalCard({ signal }: ActiveSignalCardProps) {
   const isLong = signal.direction === "long";
-  const directionColor = isLong ? "text-bullish" : "text-bearish";
   const directionBg = isLong ? "bg-bullish/10 border-bullish/20" : "bg-bearish/10 border-bearish/20";
-  const strategyColor = getStrategyColor(signal.strategy);
+  
+  // Map confidence number to label
+  const confidenceLabel = signal.confidence >= 80 ? "high" : signal.confidence >= 60 ? "medium" : "low";
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -22,31 +38,22 @@ export function SignalCard({ signal }: SignalCardProps) {
     }).format(price);
   };
 
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  const riskReward = Math.abs(signal.takeProfit - signal.entryPrice) / Math.abs(signal.entryPrice - signal.stopLoss);
-
   return (
     <Card className={`border ${directionBg} backdrop-blur animate-slide-up`}>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-lg">{getStrategyIcon(signal.strategy)}</span>
+            <span className="text-lg">{strategyIcons[signal.strategy]}</span>
             <CardTitle className="text-sm font-medium">
-              {getStrategyLabel(signal.strategy)}
+              {strategyLabels[signal.strategy]}
             </CardTitle>
           </div>
           <div className="flex items-center gap-2">
             <Badge 
               variant="outline" 
-              className={`${signal.confidence === "high" ? "border-primary/50 text-primary" : "border-muted-foreground/50 text-muted-foreground"}`}
+              className={`${confidenceLabel === "high" ? "border-primary/50 text-primary" : "border-muted-foreground/50 text-muted-foreground"}`}
             >
-              {signal.confidence}
+              {signal.confidence}%
             </Badge>
             <Badge 
               variant="outline" 
@@ -66,29 +73,29 @@ export function SignalCard({ signal }: SignalCardProps) {
               <Target className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
               Entry
             </div>
-            <p className="text-xs sm:text-sm font-mono font-medium">{formatPrice(signal.entryPrice)}</p>
+            <p className="text-xs sm:text-sm font-mono font-medium">{formatPrice(signal.entry_price)}</p>
           </div>
           <div className="rounded-lg bg-bearish/10 p-1.5 sm:p-2">
             <div className="flex items-center gap-1 text-[10px] sm:text-xs text-bearish mb-0.5 sm:mb-1">
               <Shield className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
               SL
             </div>
-            <p className="text-xs sm:text-sm font-mono font-medium text-bearish">{formatPrice(signal.stopLoss)}</p>
+            <p className="text-xs sm:text-sm font-mono font-medium text-bearish">{formatPrice(signal.stop_loss)}</p>
           </div>
           <div className="rounded-lg bg-bullish/10 p-1.5 sm:p-2">
             <div className="flex items-center gap-1 text-[10px] sm:text-xs text-bullish mb-0.5 sm:mb-1">
               <Target className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
               TP
             </div>
-            <p className="text-xs sm:text-sm font-mono font-medium text-bullish">{formatPrice(signal.takeProfit)}</p>
+            <p className="text-xs sm:text-sm font-mono font-medium text-bullish">{formatPrice(signal.take_profit)}</p>
           </div>
         </div>
 
         {/* Risk/Reward */}
         <div className="flex items-center justify-between text-xs">
           <span className="text-muted-foreground">Risk/Reward Ratio</span>
-          <span className={`font-mono font-medium ${riskReward >= 2 ? "text-bullish" : riskReward >= 1.5 ? "text-warning" : "text-bearish"}`}>
-            1:{riskReward.toFixed(2)}
+          <span className={`font-mono font-medium ${signal.risk_reward >= 2 ? "text-bullish" : signal.risk_reward >= 1.5 ? "text-warning" : "text-bearish"}`}>
+            1:{signal.risk_reward.toFixed(2)}
           </span>
         </div>
 
@@ -100,7 +107,7 @@ export function SignalCard({ signal }: SignalCardProps) {
         {/* Timestamp */}
         <div className="flex items-center gap-1 text-xs text-muted-foreground pt-1 border-t border-border/50">
           <Clock className="h-3 w-3" />
-          Detected at {formatTime(signal.timestamp)}
+          Detected {format(new Date(signal.detected_at), "MMM d, HH:mm")}
         </div>
       </CardContent>
     </Card>

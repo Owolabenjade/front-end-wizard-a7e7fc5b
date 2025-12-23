@@ -1,7 +1,5 @@
 import { useState } from "react";
 import { useMarketData } from "@/hooks/useMarketData";
-import { useSignalDetection } from "@/hooks/useSignalDetection";
-import { useAutoSubmitSignals } from "@/hooks/useAutoSubmitSignals";
 import { TimeInterval } from "@/types/trading";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { PriceTicker } from "@/components/dashboard/PriceTicker";
@@ -19,10 +17,6 @@ import { toast } from "sonner";
 const Index = () => {
   const [interval, setInterval] = useState<TimeInterval>("1h");
   const { data, isLoading, isError, refetch, isRefetching, dataUpdatedAt } = useMarketData(interval);
-  const { signals } = useSignalDetection(data);
-  
-  // Auto-submit detected signals to backend & Telegram
-  useAutoSubmitSignals(signals);
 
   const handleRefresh = () => {
     refetch();
@@ -73,8 +67,8 @@ const Index = () => {
         {/* Price Ticker */}
         <PriceTicker data={data} isLoading={isLoading} />
 
-        {/* Trade Signals */}
-        <SignalsPanel signals={signals} isLoading={isLoading} />
+        {/* Trade Signals - fetches from database */}
+        <SignalsPanel />
 
         {/* Main Chart */}
         <PriceChart 
