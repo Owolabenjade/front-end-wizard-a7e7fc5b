@@ -103,12 +103,22 @@ export default {
           from: { transform: "translateY(10px)", opacity: "0" },
           to: { transform: "translateY(0)", opacity: "1" },
         },
+        "flash-green": {
+          "0%": { color: "hsl(var(--bullish))" },
+          "100%": { color: "hsl(var(--foreground))" },
+        },
+        "flash-red": {
+          "0%": { color: "hsl(var(--bearish))" },
+          "100%": { color: "hsl(var(--foreground))" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "pulse-glow": "pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
         "slide-up": "slide-up 0.3s ease-out",
+        "flash-green": "flash-green 0.3s ease-out",
+        "flash-red": "flash-red 0.3s ease-out",
       },
     },
   },
