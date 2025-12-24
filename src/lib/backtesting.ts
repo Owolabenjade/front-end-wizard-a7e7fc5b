@@ -45,6 +45,11 @@ export interface BacktestConfig {
   maxHoldingPeriod: number; // in candles
 }
 
+// Optimized strategy parameters (matching signal-scanner)
+const EMA_BOUNCE_TOLERANCE = 0.015; // 1.5% tolerance
+const VOLUME_MULTIPLIER = 1.5; // Volume must be 1.5x average
+const VOLUME_PERIOD = 20;
+
 // Hardcoded optimal holding period matching signal-scanner (not user-configurable)
 const OPTIMAL_HOLDING_PERIOD = 36;
 
@@ -58,10 +63,25 @@ const DEFAULT_CONFIG: BacktestConfig = {
     rsi_reversal: true,
     bollinger_breakout: true,
   },
-  rsiOversold: 30,
-  rsiOverbought: 70,
+  rsiOversold: 25, // BTC-optimized (was 30)
+  rsiOverbought: 75, // BTC-optimized (was 70)
   maxHoldingPeriod: OPTIMAL_HOLDING_PERIOD, // Fixed at 36 candles
 };
+
+// Calculate average volume for the last N periods
+function calculateAverageVolume(candles: Candle[], endIndex: number, period: number = VOLUME_PERIOD): number {
+  const startIndex = Math.max(0, endIndex - period);
+  const volumeSlice = candles.slice(startIndex, endIndex);
+  if (volumeSlice.length === 0) return 0;
+  return volumeSlice.reduce((sum, c) => sum + c.volume, 0) / volumeSlice.length;
+}
+
+// Check if current volume is significant (above average)
+function hasVolumeConfirmation(candles: Candle[], index: number): boolean {
+  const avgVolume = calculateAverageVolume(candles, index, VOLUME_PERIOD);
+  const currentVolume = candles[index].volume;
+  return avgVolume > 0 && currentVolume >= avgVolume * VOLUME_MULTIPLIER;
+}
 
 function detectSignalAtIndex(
   data: MarketData,
@@ -73,15 +93,21 @@ function detectSignalAtIndex(
   const candle = data.candles[index];
   const prevCandle = data.candles[index - 1];
   const price = candle.close;
+  
+  // Volume confirmation required for all signals
+  if (!hasVolumeConfirmation(data.candles, index)) {
+    return null;
+  }
 
-  // EMA Bounce Detection
+  // EMA Bounce Detection (with increased tolerance: 1.5%)
   if (config.enabledStrategies.ema_bounce) {
     const ema21 = data.ema21[index];
     const ema50 = data.ema50[index];
     const ema200 = data.ema200[index];
 
     if (ema21 && ema50 && ema200) {
-      const touchedEma21 = candle.low <= ema21 * 1.005 && candle.low >= ema21 * 0.995;
+      const emaTolerance = EMA_BOUNCE_TOLERANCE;
+      const touchedEma21 = candle.low <= ema21 * (1 + emaTolerance) && candle.low >= ema21 * (1 - emaTolerance);
       const closedAboveEma21 = price > ema21;
       const priceAboveEma200 = price > ema200;
       const bullishCandle = price > candle.open;
@@ -91,7 +117,7 @@ function detectSignalAtIndex(
       }
 
       const priceBelowEma200 = price < ema200;
-      const touchedEma21Resist = candle.high >= ema21 * 0.995 && candle.high <= ema21 * 1.005;
+      const touchedEma21Resist = candle.high >= ema21 * (1 - emaTolerance) && candle.high <= ema21 * (1 + emaTolerance);
       const closedBelowEma21 = price < ema21;
       const bearishCandle = price < candle.open;
 
@@ -101,25 +127,31 @@ function detectSignalAtIndex(
     }
   }
 
-  // MACD Cross Detection
+  // MACD Cross Detection (with EMA 200 trend filter)
   if (config.enabledStrategies.macd_cross) {
     const currentMACD = data.macd[index];
     const prevMACD = data.macd[index - 1];
+    const ema200 = data.ema200[index];
 
-    if (currentMACD && prevMACD) {
+    if (currentMACD && prevMACD && ema200) {
+      // Only allow long MACD signals when price is above EMA 200 (bullish trend)
+      const inBullishTrend = price > ema200;
+      // Only allow short MACD signals when price is below EMA 200 (bearish trend)
+      const inBearishTrend = price < ema200;
+      
       const bullishCross = prevMACD.macd <= prevMACD.signal && currentMACD.macd > currentMACD.signal;
-      if (bullishCross) {
+      if (bullishCross && inBullishTrend) {
         return { strategy: "macd_cross", direction: "long" };
       }
 
       const bearishCross = prevMACD.macd >= prevMACD.signal && currentMACD.macd < currentMACD.signal;
-      if (bearishCross) {
+      if (bearishCross && inBearishTrend) {
         return { strategy: "macd_cross", direction: "short" };
       }
     }
   }
 
-  // RSI Reversal Detection
+  // RSI Reversal Detection (BTC-optimized thresholds)
   if (config.enabledStrategies.rsi_reversal) {
     const currentRSI = data.rsi14[index];
     const prevRSI = data.rsi14[index - 1];
@@ -137,19 +169,23 @@ function detectSignalAtIndex(
     }
   }
 
-  // Bollinger Breakout Detection
+  // Bollinger Bands - MEAN REVERSION (flipped logic)
+  // Price at lower band = oversold = LONG opportunity (expect reversion to mean)
+  // Price at upper band = overextended = SHORT opportunity (expect reversion to mean)
   if (config.enabledStrategies.bollinger_breakout) {
     const bb = data.bollingerBands[index];
     const prevBB = data.bollingerBands[index - 1];
 
     if (bb && prevBB) {
-      const brokeUpperBand = price > bb.upper && prevCandle.close <= prevBB.upper;
-      if (brokeUpperBand) {
+      // Price touching/crossing LOWER band = LONG (mean reversion up)
+      const atLowerBand = price < bb.lower && prevCandle.close >= prevBB.lower;
+      if (atLowerBand) {
         return { strategy: "bollinger_breakout", direction: "long" };
       }
 
-      const brokeLowerBand = price < bb.lower && prevCandle.close >= prevBB.lower;
-      if (brokeLowerBand) {
+      // Price touching/crossing UPPER band = SHORT (mean reversion down)
+      const atUpperBand = price > bb.upper && prevCandle.close <= prevBB.upper;
+      if (atUpperBand) {
         return { strategy: "bollinger_breakout", direction: "short" };
       }
     }
