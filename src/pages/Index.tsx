@@ -12,6 +12,7 @@ import { SignalsPanel } from "@/components/dashboard/SignalsPanel";
 import { EditableSettingsPanel } from "@/components/dashboard/EditableSettingsPanel";
 import { TradeHistoryPanel } from "@/components/dashboard/TradeHistoryPanel";
 import { StatsPanel } from "@/components/dashboard/StatsPanel";
+import { ConfluenceChart } from "@/components/dashboard/ConfluenceChart";
 import { BacktestPanel } from "@/components/dashboard/BacktestPanel";
 import { ScanHistoryPanel } from "@/components/dashboard/ScanHistoryPanel";
 import { toast } from "sonner";
@@ -117,6 +118,9 @@ const Index = () => {
           <BacktestPanel data={data} isLoading={isLoading} />
           <TradeHistoryPanel />
         </div>
+
+        {/* Confluence Chart */}
+        <ConfluenceChart />
 
         {/* Stats, Settings & Scan History Row */}
         <div className="grid gap-6 lg:grid-cols-3">
