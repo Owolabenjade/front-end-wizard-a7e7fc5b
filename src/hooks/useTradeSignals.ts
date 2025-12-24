@@ -20,6 +20,7 @@ export interface StoredSignal {
   pnl_percent: number | null;
 }
 
+// Only fetch confluence signals (confidence >= 85 means 3+ strategies aligned)
 export const useTradeSignals = (limit = 50) => {
   return useQuery({
     queryKey: ["trade-signals", limit],
@@ -27,6 +28,7 @@ export const useTradeSignals = (limit = 50) => {
       const { data, error } = await supabase
         .from("trade_signals")
         .select("*")
+        .gte("confidence", 85) // Only confluence signals
         .order("detected_at", { ascending: false })
         .limit(limit);
 
@@ -46,6 +48,7 @@ export const useTradeSignals = (limit = 50) => {
   });
 };
 
+// Only fetch active confluence signals
 export const useActiveSignals = () => {
   return useQuery({
     queryKey: ["active-signals"],
@@ -54,6 +57,7 @@ export const useActiveSignals = () => {
         .from("trade_signals")
         .select("*")
         .eq("status", "active")
+        .gte("confidence", 85) // Only confluence signals
         .order("detected_at", { ascending: false });
 
       if (error) throw error;
@@ -68,17 +72,19 @@ export const useActiveSignals = () => {
         pnl_percent: row.pnl_percent ? Number(row.pnl_percent) : null,
       }));
     },
-    refetchInterval: 15000, // Refresh every 15 seconds for active signals
+    refetchInterval: 15000,
   });
 };
 
+// Stats only for confluence signals
 export const useSignalStats = () => {
   return useQuery({
     queryKey: ["signal-stats"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("trade_signals")
-        .select("status, pnl_percent, direction");
+        .select("status, pnl_percent, direction, confidence")
+        .gte("confidence", 85); // Only confluence signals
 
       if (error) throw error;
 
@@ -87,10 +93,17 @@ export const useSignalStats = () => {
       const active = data?.filter(s => s.status === "active").length || 0;
       const expired = data?.filter(s => s.status === "expired").length || 0;
       
+      // Separate strong (85%) and full (95%) confluence
+      const strongConfluence = data?.filter(s => s.confidence === 85).length || 0;
+      const fullConfluence = data?.filter(s => s.confidence >= 95).length || 0;
+      
       const closedWithPnl = data?.filter(s => s.pnl_percent !== null) || [];
       const totalPnl = closedWithPnl.reduce((sum, s) => sum + (Number(s.pnl_percent) || 0), 0);
       const winningTrades = closedWithPnl.filter(s => Number(s.pnl_percent) > 0).length;
       const winRate = closedWithPnl.length > 0 ? (winningTrades / closedWithPnl.length) * 100 : 0;
+      
+      // Average P&L per trade
+      const avgPnl = closedWithPnl.length > 0 ? totalPnl / closedWithPnl.length : 0;
 
       const longSignals = data?.filter(s => s.direction === "long").length || 0;
       const shortSignals = data?.filter(s => s.direction === "short").length || 0;
@@ -101,9 +114,12 @@ export const useSignalStats = () => {
         triggered,
         expired,
         totalPnl,
+        avgPnl,
         winRate,
         longSignals,
         shortSignals,
+        strongConfluence,
+        fullConfluence,
       };
     },
   });
