@@ -11,6 +11,13 @@ const corsHeaders = {
 const MAX_HOLDING_PERIOD_CANDLES = 36;
 const CANDLE_DURATION_MS = 60 * 60 * 1000; // 1 hour in milliseconds
 
+// Optimized strategy parameters
+const EMA_BOUNCE_TOLERANCE = 0.015; // 1.5% tolerance (was 0.5%)
+const RSI_OVERSOLD = 25; // BTC-optimized (was 30)
+const RSI_OVERBOUGHT = 75; // BTC-optimized (was 70)
+const VOLUME_MULTIPLIER = 1.5; // Volume must be 1.5x average for confirmation
+const VOLUME_PERIOD = 20; // Look back 20 candles for average volume
+
 interface Candle {
   time: number;
   open: number;
@@ -138,17 +145,53 @@ function calculateBollingerBands(prices: number[], period: number = 20, stdDev: 
   return bands;
 }
 
+// Calculate average volume for the last N periods
+function calculateAverageVolume(candles: Candle[], endIndex: number, period: number = VOLUME_PERIOD): number {
+  const startIndex = Math.max(0, endIndex - period);
+  const volumeSlice = candles.slice(startIndex, endIndex);
+  if (volumeSlice.length === 0) return 0;
+  return volumeSlice.reduce((sum, c) => sum + c.volume, 0) / volumeSlice.length;
+}
+
+// Check if current volume is significant (above average)
+function hasVolumeConfirmation(candles: Candle[], index: number): { confirmed: boolean; ratio: number } {
+  const avgVolume = calculateAverageVolume(candles, index, VOLUME_PERIOD);
+  const currentVolume = candles[index].volume;
+  const ratio = avgVolume > 0 ? currentVolume / avgVolume : 0;
+  return {
+    confirmed: ratio >= VOLUME_MULTIPLIER,
+    ratio
+  };
+}
+
 // Detect individual strategy signals (for confluence check)
-function detectIndividualStrategies(candles: Candle[], ema21: number[], ema50: number[], ema200: number[], rsi14: number[], macd: { macd: number; signal: number; histogram: number }[], bollingerBands: { upper: number; middle: number; lower: number }[]): StrategySignal[] {
+function detectIndividualStrategies(
+  candles: Candle[], 
+  ema21: number[], 
+  ema50: number[], 
+  ema200: number[], 
+  rsi14: number[], 
+  macd: { macd: number; signal: number; histogram: number }[], 
+  bollingerBands: { upper: number; middle: number; lower: number }[]
+): StrategySignal[] {
   const signals: StrategySignal[] = [];
   const lastIndex = candles.length - 1;
   const candle = candles[lastIndex];
   const prevCandle = candles[lastIndex - 1];
   const price = candle.close;
   
-  // EMA Bounce Detection
+  // Volume confirmation check
+  const volumeCheck = hasVolumeConfirmation(candles, lastIndex);
+  if (!volumeCheck.confirmed) {
+    console.log(`📉 Volume too low (${volumeCheck.ratio.toFixed(2)}x avg) - need ${VOLUME_MULTIPLIER}x for confirmation`);
+    return signals; // No signals without volume confirmation
+  }
+  console.log(`📈 Volume confirmed (${volumeCheck.ratio.toFixed(2)}x avg)`);
+  
+  // EMA Bounce Detection (with increased tolerance: 1.5%)
   if (ema21[lastIndex] && ema50[lastIndex] && ema200[lastIndex]) {
-    const touchedEma21 = candle.low <= ema21[lastIndex] * 1.005 && candle.low >= ema21[lastIndex] * 0.995;
+    const emaTolerance = EMA_BOUNCE_TOLERANCE;
+    const touchedEma21 = candle.low <= ema21[lastIndex] * (1 + emaTolerance) && candle.low >= ema21[lastIndex] * (1 - emaTolerance);
     const closedAboveEma21 = price > ema21[lastIndex];
     const priceAboveEma200 = price > ema200[lastIndex];
     const bullishCandle = price > candle.open;
@@ -157,12 +200,12 @@ function detectIndividualStrategies(candles: Candle[], ema21: number[], ema50: n
       signals.push({
         strategy: "ema_bounce",
         direction: "long",
-        reason: `Price bounced off EMA 21 (${ema21[lastIndex].toFixed(0)}) with bullish close. Trend support from EMA 200.`
+        reason: `Price bounced off EMA 21 (${ema21[lastIndex].toFixed(0)}) with bullish close. Trend support from EMA 200. Vol: ${volumeCheck.ratio.toFixed(1)}x avg.`
       });
     }
     
     // Short: touched EMA from below and closed below with bearish confirmation
-    const touchedEma21Short = candle.high >= ema21[lastIndex] * 0.995 && candle.high <= ema21[lastIndex] * 1.005;
+    const touchedEma21Short = candle.high >= ema21[lastIndex] * (1 - emaTolerance) && candle.high <= ema21[lastIndex] * (1 + emaTolerance);
     const closedBelowEma21 = price < ema21[lastIndex];
     const priceBelowEma200 = price < ema200[lastIndex];
     const bearishCandle = price < candle.open;
@@ -171,78 +214,93 @@ function detectIndividualStrategies(candles: Candle[], ema21: number[], ema50: n
       signals.push({
         strategy: "ema_bounce",
         direction: "short",
-        reason: `Price rejected from EMA 21 (${ema21[lastIndex].toFixed(0)}) with bearish close. Downtrend from EMA 200.`
+        reason: `Price rejected from EMA 21 (${ema21[lastIndex].toFixed(0)}) with bearish close. Downtrend from EMA 200. Vol: ${volumeCheck.ratio.toFixed(1)}x avg.`
       });
     }
   }
   
-  // MACD Cross Detection
-  if (macd[lastIndex] && macd[lastIndex - 1]) {
+  // MACD Cross Detection (with EMA 200 trend filter)
+  if (macd[lastIndex] && macd[lastIndex - 1] && ema200[lastIndex]) {
     const currentMACD = macd[lastIndex];
     const prevMACD = macd[lastIndex - 1];
     
+    // Only allow long MACD signals when price is above EMA 200 (bullish trend)
+    const inBullishTrend = price > ema200[lastIndex];
+    // Only allow short MACD signals when price is below EMA 200 (bearish trend)
+    const inBearishTrend = price < ema200[lastIndex];
+    
     const bullishCross = prevMACD.macd <= prevMACD.signal && currentMACD.macd > currentMACD.signal;
-    if (bullishCross) {
+    if (bullishCross && inBullishTrend) {
       signals.push({
         strategy: "macd_cross",
         direction: "long",
-        reason: `MACD line crossed above signal line. Histogram: ${currentMACD.histogram.toFixed(2)}`
+        reason: `MACD bullish cross confirmed by EMA 200 uptrend. Histogram: ${currentMACD.histogram.toFixed(2)}. Vol: ${volumeCheck.ratio.toFixed(1)}x avg.`
       });
+    } else if (bullishCross && !inBullishTrend) {
+      console.log(`🚫 MACD bullish cross rejected - price below EMA 200 (counter-trend)`);
     }
     
     const bearishCross = prevMACD.macd >= prevMACD.signal && currentMACD.macd < currentMACD.signal;
-    if (bearishCross) {
+    if (bearishCross && inBearishTrend) {
       signals.push({
         strategy: "macd_cross",
         direction: "short",
-        reason: `MACD line crossed below signal line. Histogram: ${currentMACD.histogram.toFixed(2)}`
+        reason: `MACD bearish cross confirmed by EMA 200 downtrend. Histogram: ${currentMACD.histogram.toFixed(2)}. Vol: ${volumeCheck.ratio.toFixed(1)}x avg.`
       });
+    } else if (bearishCross && !inBearishTrend) {
+      console.log(`🚫 MACD bearish cross rejected - price above EMA 200 (counter-trend)`);
     }
   }
   
-  // RSI Reversal Detection
+  // RSI Reversal Detection (BTC-optimized thresholds: 25/75)
   if (rsi14[lastIndex] && rsi14[lastIndex - 1]) {
     const currentRSI = rsi14[lastIndex];
     const prevRSI = rsi14[lastIndex - 1];
     
-    if (prevRSI < 30 && currentRSI > 30) {
+    if (prevRSI < RSI_OVERSOLD && currentRSI > RSI_OVERSOLD) {
       signals.push({
         strategy: "rsi_reversal",
         direction: "long",
-        reason: `RSI exiting oversold territory. Current: ${currentRSI.toFixed(1)}`
+        reason: `RSI exiting deep oversold (< ${RSI_OVERSOLD}). Current: ${currentRSI.toFixed(1)}. Vol: ${volumeCheck.ratio.toFixed(1)}x avg.`
       });
     }
     
-    if (prevRSI > 70 && currentRSI < 70) {
+    if (prevRSI > RSI_OVERBOUGHT && currentRSI < RSI_OVERBOUGHT) {
       signals.push({
         strategy: "rsi_reversal",
         direction: "short",
-        reason: `RSI exiting overbought territory. Current: ${currentRSI.toFixed(1)}`
+        reason: `RSI exiting deep overbought (> ${RSI_OVERBOUGHT}). Current: ${currentRSI.toFixed(1)}. Vol: ${volumeCheck.ratio.toFixed(1)}x avg.`
       });
     }
   }
   
-  // Bollinger Breakout Detection
+  // Bollinger Bands - MEAN REVERSION (flipped logic)
+  // Price at upper band = overextended = SHORT opportunity (expect reversion to mean)
+  // Price at lower band = oversold = LONG opportunity (expect reversion to mean)
   if (bollingerBands[lastIndex] && bollingerBands[lastIndex - 1] && prevCandle) {
     const bb = bollingerBands[lastIndex];
     const prevBB = bollingerBands[lastIndex - 1];
     
-    if (price > bb.upper && prevCandle.close <= prevBB.upper) {
-      signals.push({
-        strategy: "bollinger_breakout",
-        direction: "long",
-        reason: `Price breaking above upper Bollinger Band (${bb.upper.toFixed(0)})`
-      });
-    }
-    
+    // Price touching/crossing LOWER band = LONG (mean reversion up)
     if (price < bb.lower && prevCandle.close >= prevBB.lower) {
       signals.push({
         strategy: "bollinger_breakout",
+        direction: "long",
+        reason: `Price at lower Bollinger Band ($${bb.lower.toFixed(0)}) - mean reversion expected. Target: middle band ($${bb.middle.toFixed(0)}). Vol: ${volumeCheck.ratio.toFixed(1)}x avg.`
+      });
+    }
+    
+    // Price touching/crossing UPPER band = SHORT (mean reversion down)
+    if (price > bb.upper && prevCandle.close <= prevBB.upper) {
+      signals.push({
+        strategy: "bollinger_breakout",
         direction: "short",
-        reason: `Price breaking below lower Bollinger Band (${bb.lower.toFixed(0)})`
+        reason: `Price at upper Bollinger Band ($${bb.upper.toFixed(0)}) - mean reversion expected. Target: middle band ($${bb.middle.toFixed(0)}). Vol: ${volumeCheck.ratio.toFixed(1)}x avg.`
       });
     }
   }
+  
+  console.log(`Individual signals detected: ${signals.map(s => `${s.strategy}(${s.direction})`).join(", ") || "none"}`);
   
   return signals;
 }
@@ -269,7 +327,7 @@ function detectSignals(candles: Candle[], ema21: number[], ema50: number[], ema2
     ema_bounce: "EMA Bounce",
     macd_cross: "MACD Cross",
     rsi_reversal: "RSI Reversal",
-    bollinger_breakout: "Bollinger Breakout",
+    bollinger_breakout: "BB Mean Reversion", // Updated label
   };
   
   // Check for long confluence (3+ strategies agree on long)
@@ -293,7 +351,7 @@ function detectSignals(candles: Candle[], ema21: number[], ema50: number[], ema2
       alignedStrategies,
     });
     
-    console.log(`LONG confluence detected: ${longSignals.length} strategies aligned - ${alignedStrategies.join(", ")}`);
+    console.log(`✅ LONG confluence detected: ${longSignals.length} strategies aligned - ${alignedStrategies.join(", ")}`);
   }
   
   // Check for short confluence (3+ strategies agree on short)
@@ -317,7 +375,7 @@ function detectSignals(candles: Candle[], ema21: number[], ema50: number[], ema2
       alignedStrategies,
     });
     
-    console.log(`SHORT confluence detected: ${shortSignals.length} strategies aligned - ${alignedStrategies.join(", ")}`);
+    console.log(`✅ SHORT confluence detected: ${shortSignals.length} strategies aligned - ${alignedStrategies.join(", ")}`);
   }
   
   return results;
@@ -468,7 +526,7 @@ async function sendTPSLHitNotification(
     ema_bounce: "EMA Bounce",
     macd_cross: "MACD Cross",
     rsi_reversal: "RSI Reversal",
-    bollinger_breakout: "Bollinger Breakout",
+    bollinger_breakout: "BB Mean Reversion",
   };
 
   const message = `
@@ -534,6 +592,7 @@ serve(async (req) => {
 
   try {
     console.log(`Signal scanner started (${scanType})...`);
+    console.log(`Strategy params: EMA tolerance=${EMA_BOUNCE_TOLERANCE*100}%, RSI=${RSI_OVERSOLD}/${RSI_OVERBOUGHT}, Vol=${VOLUME_MULTIPLIER}x`);
     
     // Fetch market data from Binance
     const interval = "1h";
@@ -564,7 +623,7 @@ serve(async (req) => {
     
     // Detect signals
     const detectedSignals = detectSignals(candles, ema21, ema50, ema200, rsi14, macd, bollingerBands);
-    console.log(`Detected ${detectedSignals.length} signals`);
+    console.log(`Detected ${detectedSignals.length} confluence signals`);
     
     if (detectedSignals.length === 0) {
       // Log scan with no signals
