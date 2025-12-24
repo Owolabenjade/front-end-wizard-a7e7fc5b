@@ -83,21 +83,19 @@ function hasVolumeConfirmation(candles: Candle[], index: number): boolean {
   return avgVolume > 0 && currentVolume >= avgVolume * VOLUME_MULTIPLIER;
 }
 
-function detectSignalAtIndex(
+// Detect individual strategy signals (returns all signals for confluence check)
+function detectIndividualSignals(
   data: MarketData,
   index: number,
   config: BacktestConfig
-): { strategy: string; direction: "long" | "short" } | null {
-  if (index < 3) return null;
+): Array<{ strategy: string; direction: "long" | "short" }> {
+  const signals: Array<{ strategy: string; direction: "long" | "short" }> = [];
+  
+  if (index < 3) return signals;
 
   const candle = data.candles[index];
   const prevCandle = data.candles[index - 1];
   const price = candle.close;
-  
-  // Volume confirmation required for all signals
-  if (!hasVolumeConfirmation(data.candles, index)) {
-    return null;
-  }
 
   // EMA Bounce Detection (with increased tolerance: 1.5%)
   if (config.enabledStrategies.ema_bounce) {
@@ -113,7 +111,7 @@ function detectSignalAtIndex(
       const bullishCandle = price > candle.open;
 
       if (touchedEma21 && closedAboveEma21 && priceAboveEma200 && bullishCandle) {
-        return { strategy: "ema_bounce", direction: "long" };
+        signals.push({ strategy: "ema_bounce", direction: "long" });
       }
 
       const priceBelowEma200 = price < ema200;
@@ -122,7 +120,7 @@ function detectSignalAtIndex(
       const bearishCandle = price < candle.open;
 
       if (touchedEma21Resist && closedBelowEma21 && priceBelowEma200 && bearishCandle) {
-        return { strategy: "ema_bounce", direction: "short" };
+        signals.push({ strategy: "ema_bounce", direction: "short" });
       }
     }
   }
@@ -134,19 +132,17 @@ function detectSignalAtIndex(
     const ema200 = data.ema200[index];
 
     if (currentMACD && prevMACD && ema200) {
-      // Only allow long MACD signals when price is above EMA 200 (bullish trend)
       const inBullishTrend = price > ema200;
-      // Only allow short MACD signals when price is below EMA 200 (bearish trend)
       const inBearishTrend = price < ema200;
       
       const bullishCross = prevMACD.macd <= prevMACD.signal && currentMACD.macd > currentMACD.signal;
       if (bullishCross && inBullishTrend) {
-        return { strategy: "macd_cross", direction: "long" };
+        signals.push({ strategy: "macd_cross", direction: "long" });
       }
 
       const bearishCross = prevMACD.macd >= prevMACD.signal && currentMACD.macd < currentMACD.signal;
       if (bearishCross && inBearishTrend) {
-        return { strategy: "macd_cross", direction: "short" };
+        signals.push({ strategy: "macd_cross", direction: "short" });
       }
     }
   }
@@ -159,19 +155,17 @@ function detectSignalAtIndex(
     if (currentRSI && prevRSI) {
       const exitingOversold = currentRSI > config.rsiOversold && prevRSI <= config.rsiOversold;
       if (exitingOversold) {
-        return { strategy: "rsi_reversal", direction: "long" };
+        signals.push({ strategy: "rsi_reversal", direction: "long" });
       }
 
       const exitingOverbought = currentRSI < config.rsiOverbought && prevRSI >= config.rsiOverbought;
       if (exitingOverbought) {
-        return { strategy: "rsi_reversal", direction: "short" };
+        signals.push({ strategy: "rsi_reversal", direction: "short" });
       }
     }
   }
 
   // Bollinger Bands - MEAN REVERSION (flipped logic)
-  // Price at lower band = oversold = LONG opportunity (expect reversion to mean)
-  // Price at upper band = overextended = SHORT opportunity (expect reversion to mean)
   if (config.enabledStrategies.bollinger_breakout) {
     const bb = data.bollingerBands[index];
     const prevBB = data.bollingerBands[index - 1];
@@ -180,17 +174,65 @@ function detectSignalAtIndex(
       // Price touching/crossing LOWER band = LONG (mean reversion up)
       const atLowerBand = price < bb.lower && prevCandle.close >= prevBB.lower;
       if (atLowerBand) {
-        return { strategy: "bollinger_breakout", direction: "long" };
+        signals.push({ strategy: "bollinger_breakout", direction: "long" });
       }
 
       // Price touching/crossing UPPER band = SHORT (mean reversion down)
       const atUpperBand = price > bb.upper && prevCandle.close <= prevBB.upper;
       if (atUpperBand) {
-        return { strategy: "bollinger_breakout", direction: "short" };
+        signals.push({ strategy: "bollinger_breakout", direction: "short" });
       }
     }
   }
 
+  return signals;
+}
+
+// Minimum strategies required for confluence
+const MIN_CONFLUENCE_STRATEGIES = 3;
+
+function detectSignalAtIndex(
+  data: MarketData,
+  index: number,
+  config: BacktestConfig
+): { strategy: string; direction: "long" | "short" } | null {
+  // Volume confirmation required for all signals
+  if (!hasVolumeConfirmation(data.candles, index)) {
+    return null;
+  }
+
+  // Get all individual signals
+  const allSignals = detectIndividualSignals(data, index, config);
+  
+  if (allSignals.length === 0) return null;
+
+  // Count signals by direction
+  const longSignals = allSignals.filter(s => s.direction === "long");
+  const shortSignals = allSignals.filter(s => s.direction === "short");
+
+  // Check for long confluence (3+ strategies agreeing)
+  if (longSignals.length >= MIN_CONFLUENCE_STRATEGIES) {
+    const strategies = longSignals.map(s => s.strategy).join(" + ");
+    const isFullConfluence = longSignals.length >= 4;
+    const confluenceLevel = isFullConfluence ? "full_confluence" : "strong_confluence";
+    return { 
+      strategy: `${confluenceLevel} (${strategies})`, 
+      direction: "long" 
+    };
+  }
+
+  // Check for short confluence (3+ strategies agreeing)
+  if (shortSignals.length >= MIN_CONFLUENCE_STRATEGIES) {
+    const strategies = shortSignals.map(s => s.strategy).join(" + ");
+    const isFullConfluence = shortSignals.length >= 4;
+    const confluenceLevel = isFullConfluence ? "full_confluence" : "strong_confluence";
+    return { 
+      strategy: `${confluenceLevel} (${strategies})`, 
+      direction: "short" 
+    };
+  }
+
+  // No confluence detected
   return null;
 }
 
