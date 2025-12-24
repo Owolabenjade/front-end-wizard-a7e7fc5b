@@ -624,13 +624,55 @@ serve(async (req) => {
     console.log(`Signal scanner started (${scanType})...`);
     console.log(`Strategy params: EMA tolerance=${EMA_BOUNCE_TOLERANCE*100}%, RSI=${RSI_OVERSOLD}/${RSI_OVERBOUGHT}, Vol=${VOLUME_MULTIPLIER}x`);
     
-    // Fetch market data from Binance
+    // Fetch market data from Binance with fallback endpoints
     const interval = "1h";
     const limit = 100;
-    const klineUrl = `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=${interval}&limit=${limit}`;
     
-    const klineResponse = await fetch(klineUrl);
-    const klineData = await klineResponse.json();
+    // Try multiple Binance endpoints (some regions block api.binance.com)
+    const binanceEndpoints = [
+      "https://api.binance.com",
+      "https://api.binance.us",
+      "https://api1.binance.com",
+      "https://api2.binance.com",
+    ];
+
+    let klineData: any = null;
+    let lastError: string = "";
+
+    for (const endpoint of binanceEndpoints) {
+      try {
+        console.log(`Trying endpoint: ${endpoint}`);
+        const klineUrl = `${endpoint}/api/v3/klines?symbol=BTCUSDT&interval=${interval}&limit=${limit}`;
+        const klineResponse = await fetch(klineUrl);
+        
+        if (!klineResponse.ok) {
+          console.log(`${endpoint} returned ${klineResponse.status}`);
+          lastError = `${endpoint} returned ${klineResponse.status}`;
+          continue;
+        }
+        
+        const data = await klineResponse.json();
+        
+        // Validate response is an array
+        if (!Array.isArray(data)) {
+          console.log(`${endpoint} returned non-array response`);
+          lastError = `${endpoint} returned invalid data format`;
+          continue;
+        }
+        
+        console.log(`Successfully fetched ${data.length} candles from ${endpoint}`);
+        klineData = data;
+        break;
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.log(`Error with ${endpoint}: ${errorMessage}`);
+        lastError = errorMessage;
+      }
+    }
+
+    if (!klineData) {
+      throw new Error(`Failed to fetch Binance data from all endpoints. Last error: ${lastError}`);
+    }
     
     const candles: Candle[] = klineData.map((k: (string | number)[]) => ({
       time: Number(k[0]),
