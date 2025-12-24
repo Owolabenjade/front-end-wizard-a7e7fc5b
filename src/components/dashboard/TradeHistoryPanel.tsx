@@ -13,14 +13,15 @@ import { useTradeSignals, StoredSignal } from "@/hooks/useTradeSignals";
 import { History, TrendingUp, TrendingDown, Clock, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 import { format } from "date-fns";
 
-const getStrategyLabel = (strategy: StoredSignal["strategy"]) => {
-  const labels: Record<StoredSignal["strategy"], string> = {
-    ema_bounce: "EMA Bounce",
-    macd_cross: "MACD Cross",
-    rsi_reversal: "RSI Reversal",
-    bollinger_breakout: "BB Breakout",
-  };
-  return labels[strategy];
+const getConfluenceLabel = (confidence: number) => {
+  if (confidence >= 95) return "Full Confluence";
+  if (confidence >= 85) return "Strong Confluence";
+  return "Confluence";
+};
+
+const getConfluenceColor = (confidence: number) => {
+  if (confidence >= 95) return "bg-chart-bullish/20 text-chart-bullish border-chart-bullish/50";
+  return "bg-primary/20 text-primary border-primary/50";
 };
 
 const getStatusIcon = (status: StoredSignal["status"]) => {
@@ -111,8 +112,10 @@ export const TradeHistoryPanel = () => {
                     <TableCell className="text-xs text-muted-foreground">
                       {format(new Date(signal.detected_at), "MMM d, HH:mm")}
                     </TableCell>
-                    <TableCell className="text-xs font-medium">
-                      {getStrategyLabel(signal.strategy)}
+                    <TableCell>
+                      <Badge variant="outline" className={`text-xs ${getConfluenceColor(signal.confidence)}`}>
+                        {getConfluenceLabel(signal.confidence)}
+                      </Badge>
                     </TableCell>
                     <TableCell>
                       <Badge
