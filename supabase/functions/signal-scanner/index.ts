@@ -574,21 +574,51 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Initialize Supabase client early for logging and auth
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
   // Determine scan type from request body or default to cron
   let scanType = "cron";
+  let requestBody: { scanType?: string } = {};
   try {
-    const body = await req.json().catch(() => ({}));
-    if (body.scanType === "manual") {
+    requestBody = await req.json().catch(() => ({}));
+    if (requestBody.scanType === "manual") {
       scanType = "manual";
     }
   } catch {
     // Default to cron if no body
   }
 
-  // Initialize Supabase client early for logging
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const supabase = createClient(supabaseUrl, supabaseKey);
+  // For manual scans, require authentication
+  if (scanType === "manual") {
+    const authHeader = req.headers.get("Authorization");
+    
+    if (!authHeader) {
+      console.log("Manual scan rejected: No authorization header");
+      return new Response(
+        JSON.stringify({ error: "Unauthorized - authentication required for manual scans" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Verify the user token using a client with anon key
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token);
+    
+    if (authError || !user) {
+      console.log("Manual scan rejected: Invalid token", authError?.message);
+      return new Response(
+        JSON.stringify({ error: "Invalid authentication token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
+    console.log(`Manual scan authorized for user: ${user.email}`);
+  }
 
   try {
     console.log(`Signal scanner started (${scanType})...`);
