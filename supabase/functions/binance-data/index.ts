@@ -173,20 +173,57 @@ serve(async (req) => {
     
     console.log(`Fetching Binance data: interval=${interval}, limit=${limit}`);
 
-    // Fetch klines data from Binance
-    const klinesUrl = `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=${interval}&limit=${limit}`;
-    const klinesResponse = await fetch(klinesUrl);
-    
-    if (!klinesResponse.ok) {
-      throw new Error(`Binance API error: ${klinesResponse.status}`);
+    // Try multiple Binance API endpoints (main, US, testnet) as fallbacks
+    const apiEndpoints = [
+      "https://api.binance.com",
+      "https://api.binance.us", 
+      "https://testnet.binance.vision"
+    ];
+
+    let klinesData = null;
+    let tickerData = null;
+    let lastError = "";
+
+    for (const baseUrl of apiEndpoints) {
+      try {
+        console.log(`Trying endpoint: ${baseUrl}`);
+        
+        // Fetch klines data
+        const klinesUrl = `${baseUrl}/api/v3/klines?symbol=BTCUSDT&interval=${interval}&limit=${limit}`;
+        const klinesResponse = await fetch(klinesUrl);
+        
+        if (!klinesResponse.ok) {
+          lastError = `${baseUrl} returned ${klinesResponse.status}`;
+          console.log(lastError);
+          continue;
+        }
+        
+        klinesData = await klinesResponse.json();
+        
+        // Fetch 24h ticker data
+        const tickerUrl = `${baseUrl}/api/v3/ticker/24hr?symbol=BTCUSDT`;
+        const tickerResponse = await fetch(tickerUrl);
+        
+        if (!tickerResponse.ok) {
+          lastError = `${baseUrl} ticker returned ${tickerResponse.status}`;
+          console.log(lastError);
+          klinesData = null;
+          continue;
+        }
+        
+        tickerData = await tickerResponse.json();
+        console.log(`Successfully fetched data from ${baseUrl}`);
+        break;
+      } catch (e) {
+        lastError = e instanceof Error ? e.message : "Unknown error";
+        console.log(`Error with ${baseUrl}: ${lastError}`);
+        continue;
+      }
     }
-    
-    const klinesData = await klinesResponse.json();
-    
-    // Fetch 24h ticker data
-    const tickerUrl = "https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT";
-    const tickerResponse = await fetch(tickerUrl);
-    const tickerData = await tickerResponse.json();
+
+    if (!klinesData || !tickerData) {
+      throw new Error(`All Binance endpoints failed. Last error: ${lastError}`);
+    }
     
     // Parse candles
     const candles: Candle[] = klinesData.map((k: any[]) => ({
