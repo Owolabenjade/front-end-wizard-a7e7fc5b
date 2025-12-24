@@ -1,4 +1,4 @@
-import { Activity, RefreshCw, Radar, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
+import { Activity, RefreshCw, Radar, CheckCircle2, XCircle, AlertCircle, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useState } from "react";
@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { useAuth } from "@/hooks/useAuth";
 
 interface DashboardHeaderProps {
   onRefresh: () => void;
@@ -25,10 +26,15 @@ interface ScanResult {
 }
 
 export function DashboardHeader({ onRefresh, isRefetching, lastUpdated }: DashboardHeaderProps) {
+  const { user, signOut } = useAuth();
   const [isScanning, setIsScanning] = useState(false);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [showResultDialog, setShowResultDialog] = useState(false);
 
+  const handleSignOut = async () => {
+    await signOut();
+    toast.success("Signed out successfully");
+  };
   const handleManualScan = async () => {
     setIsScanning(true);
     setScanResult(null);
@@ -126,6 +132,17 @@ export function DashboardHeader({ onRefresh, isRefetching, lastUpdated }: Dashbo
             <RefreshCw className={`h-4 w-4 sm:h-5 sm:w-5 ${isRefetching ? "animate-spin" : ""}`} />
             <span className="hidden sm:inline">Refresh</span>
           </Button>
+          {user && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleSignOut}
+              className="gap-2 min-h-[44px] min-w-[44px] px-3 sm:px-4 touch-manipulation text-muted-foreground hover:text-foreground"
+            >
+              <LogOut className="h-4 w-4 sm:h-5 sm:w-5" />
+              <span className="hidden sm:inline">Sign Out</span>
+            </Button>
+          )}
         </div>
       </header>
 
