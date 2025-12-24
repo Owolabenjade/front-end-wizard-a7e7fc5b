@@ -20,6 +20,12 @@ interface Candle {
   volume: number;
 }
 
+interface StrategySignal {
+  strategy: "ema_bounce" | "macd_cross" | "rsi_reversal" | "bollinger_breakout";
+  direction: "long" | "short";
+  reason: string;
+}
+
 interface SignalResult {
   strategy: "ema_bounce" | "macd_cross" | "rsi_reversal" | "bollinger_breakout";
   direction: "long" | "short";
@@ -29,6 +35,8 @@ interface SignalResult {
   takeProfit: number;
   riskReward: number;
   reason: string;
+  confluenceLevel: "strong" | "confluence";
+  alignedStrategies: string[];
 }
 
 // Calculate EMA
@@ -130,15 +138,13 @@ function calculateBollingerBands(prices: number[], period: number = 20, stdDev: 
   return bands;
 }
 
-// Detect signals
-function detectSignals(candles: Candle[], ema21: number[], ema50: number[], ema200: number[], rsi14: number[], macd: { macd: number; signal: number; histogram: number }[], bollingerBands: { upper: number; middle: number; lower: number }[]): SignalResult[] {
-  const signals: SignalResult[] = [];
+// Detect individual strategy signals (for confluence check)
+function detectIndividualStrategies(candles: Candle[], ema21: number[], ema50: number[], ema200: number[], rsi14: number[], macd: { macd: number; signal: number; histogram: number }[], bollingerBands: { upper: number; middle: number; lower: number }[]): StrategySignal[] {
+  const signals: StrategySignal[] = [];
   const lastIndex = candles.length - 1;
   const candle = candles[lastIndex];
   const prevCandle = candles[lastIndex - 1];
   const price = candle.close;
-  
-  const config = { profitTarget: 0.08, stopLoss: 0.04 };
   
   // EMA Bounce Detection
   if (ema21[lastIndex] && ema50[lastIndex] && ema200[lastIndex]) {
@@ -151,12 +157,21 @@ function detectSignals(candles: Candle[], ema21: number[], ema50: number[], ema2
       signals.push({
         strategy: "ema_bounce",
         direction: "long",
-        confidence: price > ema50[lastIndex] ? 90 : 70,
-        entryPrice: price,
-        stopLoss: price * (1 - config.stopLoss),
-        takeProfit: price * (1 + config.profitTarget),
-        riskReward: config.profitTarget / config.stopLoss,
         reason: `Price bounced off EMA 21 (${ema21[lastIndex].toFixed(0)}) with bullish close. Trend support from EMA 200.`
+      });
+    }
+    
+    // Short: touched EMA from below and closed below with bearish confirmation
+    const touchedEma21Short = candle.high >= ema21[lastIndex] * 0.995 && candle.high <= ema21[lastIndex] * 1.005;
+    const closedBelowEma21 = price < ema21[lastIndex];
+    const priceBelowEma200 = price < ema200[lastIndex];
+    const bearishCandle = price < candle.open;
+    
+    if (touchedEma21Short && closedBelowEma21 && priceBelowEma200 && bearishCandle) {
+      signals.push({
+        strategy: "ema_bounce",
+        direction: "short",
+        reason: `Price rejected from EMA 21 (${ema21[lastIndex].toFixed(0)}) with bearish close. Downtrend from EMA 200.`
       });
     }
   }
@@ -171,11 +186,6 @@ function detectSignals(candles: Candle[], ema21: number[], ema50: number[], ema2
       signals.push({
         strategy: "macd_cross",
         direction: "long",
-        confidence: Math.abs(currentMACD.histogram) > Math.abs(prevMACD.histogram) ? 85 : 70,
-        entryPrice: price,
-        stopLoss: price * (1 - config.stopLoss),
-        takeProfit: price * (1 + config.profitTarget),
-        riskReward: config.profitTarget / config.stopLoss,
         reason: `MACD line crossed above signal line. Histogram: ${currentMACD.histogram.toFixed(2)}`
       });
     }
@@ -185,11 +195,6 @@ function detectSignals(candles: Candle[], ema21: number[], ema50: number[], ema2
       signals.push({
         strategy: "macd_cross",
         direction: "short",
-        confidence: Math.abs(currentMACD.histogram) > Math.abs(prevMACD.histogram) ? 85 : 70,
-        entryPrice: price,
-        stopLoss: price * (1 + config.stopLoss),
-        takeProfit: price * (1 - config.profitTarget),
-        riskReward: config.profitTarget / config.stopLoss,
         reason: `MACD line crossed below signal line. Histogram: ${currentMACD.histogram.toFixed(2)}`
       });
     }
@@ -204,11 +209,6 @@ function detectSignals(candles: Candle[], ema21: number[], ema50: number[], ema2
       signals.push({
         strategy: "rsi_reversal",
         direction: "long",
-        confidence: currentRSI < 35 ? 85 : 70,
-        entryPrice: price,
-        stopLoss: price * (1 - config.stopLoss),
-        takeProfit: price * (1 + config.profitTarget),
-        riskReward: config.profitTarget / config.stopLoss,
         reason: `RSI exiting oversold territory. Current: ${currentRSI.toFixed(1)}`
       });
     }
@@ -217,11 +217,6 @@ function detectSignals(candles: Candle[], ema21: number[], ema50: number[], ema2
       signals.push({
         strategy: "rsi_reversal",
         direction: "short",
-        confidence: currentRSI > 65 ? 85 : 70,
-        entryPrice: price,
-        stopLoss: price * (1 + config.stopLoss),
-        takeProfit: price * (1 - config.profitTarget),
-        riskReward: config.profitTarget / config.stopLoss,
         reason: `RSI exiting overbought territory. Current: ${currentRSI.toFixed(1)}`
       });
     }
@@ -236,11 +231,6 @@ function detectSignals(candles: Candle[], ema21: number[], ema50: number[], ema2
       signals.push({
         strategy: "bollinger_breakout",
         direction: "long",
-        confidence: 80,
-        entryPrice: price,
-        stopLoss: bb.middle,
-        takeProfit: price * (1 + config.profitTarget),
-        riskReward: (price * config.profitTarget) / (price - bb.middle),
         reason: `Price breaking above upper Bollinger Band (${bb.upper.toFixed(0)})`
       });
     }
@@ -249,11 +239,6 @@ function detectSignals(candles: Candle[], ema21: number[], ema50: number[], ema2
       signals.push({
         strategy: "bollinger_breakout",
         direction: "short",
-        confidence: 80,
-        entryPrice: price,
-        stopLoss: bb.middle,
-        takeProfit: price * (1 - config.profitTarget),
-        riskReward: (price * config.profitTarget) / (bb.middle - price),
         reason: `Price breaking below lower Bollinger Band (${bb.lower.toFixed(0)})`
       });
     }
@@ -262,7 +247,83 @@ function detectSignals(candles: Candle[], ema21: number[], ema50: number[], ema2
   return signals;
 }
 
-// Send Telegram notification for new signal
+// Detect confluence signals (only when 3+ strategies align)
+function detectSignals(candles: Candle[], ema21: number[], ema50: number[], ema200: number[], rsi14: number[], macd: { macd: number; signal: number; histogram: number }[], bollingerBands: { upper: number; middle: number; lower: number }[]): SignalResult[] {
+  const individualSignals = detectIndividualStrategies(candles, ema21, ema50, ema200, rsi14, macd, bollingerBands);
+  
+  if (individualSignals.length < 3) {
+    console.log(`Only ${individualSignals.length} strategy signal(s) detected - need 3+ for confluence`);
+    return [];
+  }
+  
+  // Group signals by direction
+  const longSignals = individualSignals.filter(s => s.direction === "long");
+  const shortSignals = individualSignals.filter(s => s.direction === "short");
+  
+  const results: SignalResult[] = [];
+  const lastIndex = candles.length - 1;
+  const price = candles[lastIndex].close;
+  const config = { profitTarget: 0.08, stopLoss: 0.04 };
+  
+  const strategyLabels: Record<string, string> = {
+    ema_bounce: "EMA Bounce",
+    macd_cross: "MACD Cross",
+    rsi_reversal: "RSI Reversal",
+    bollinger_breakout: "Bollinger Breakout",
+  };
+  
+  // Check for long confluence (3+ strategies agree on long)
+  if (longSignals.length >= 3) {
+    const alignedStrategies = longSignals.map(s => strategyLabels[s.strategy]);
+    const confluenceLevel = longSignals.length === 4 ? "confluence" : "strong";
+    const confidence = longSignals.length === 4 ? 95 : 85;
+    
+    const combinedReasons = longSignals.map(s => `• ${strategyLabels[s.strategy]}: ${s.reason}`).join("\n");
+    
+    results.push({
+      strategy: longSignals[0].strategy, // Primary strategy (first detected)
+      direction: "long",
+      confidence,
+      entryPrice: price,
+      stopLoss: price * (1 - config.stopLoss),
+      takeProfit: price * (1 + config.profitTarget),
+      riskReward: config.profitTarget / config.stopLoss,
+      reason: `🔥 ${confluenceLevel.toUpperCase()} CONFLUENCE (${longSignals.length}/4 strategies aligned LONG)\n${combinedReasons}`,
+      confluenceLevel,
+      alignedStrategies,
+    });
+    
+    console.log(`LONG confluence detected: ${longSignals.length} strategies aligned - ${alignedStrategies.join(", ")}`);
+  }
+  
+  // Check for short confluence (3+ strategies agree on short)
+  if (shortSignals.length >= 3) {
+    const alignedStrategies = shortSignals.map(s => strategyLabels[s.strategy]);
+    const confluenceLevel = shortSignals.length === 4 ? "confluence" : "strong";
+    const confidence = shortSignals.length === 4 ? 95 : 85;
+    
+    const combinedReasons = shortSignals.map(s => `• ${strategyLabels[s.strategy]}: ${s.reason}`).join("\n");
+    
+    results.push({
+      strategy: shortSignals[0].strategy, // Primary strategy (first detected)
+      direction: "short",
+      confidence,
+      entryPrice: price,
+      stopLoss: price * (1 + config.stopLoss),
+      takeProfit: price * (1 - config.profitTarget),
+      riskReward: config.profitTarget / config.stopLoss,
+      reason: `🔥 ${confluenceLevel.toUpperCase()} CONFLUENCE (${shortSignals.length}/4 strategies aligned SHORT)\n${combinedReasons}`,
+      confluenceLevel,
+      alignedStrategies,
+    });
+    
+    console.log(`SHORT confluence detected: ${shortSignals.length} strategies aligned - ${alignedStrategies.join(", ")}`);
+  }
+  
+  return results;
+}
+
+// Send Telegram notification for new confluence signal
 async function sendTelegramNotification(signal: SignalResult): Promise<boolean> {
   const botToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
   const chatId = Deno.env.get("TELEGRAM_CHAT_ID");
@@ -273,19 +334,17 @@ async function sendTelegramNotification(signal: SignalResult): Promise<boolean> 
   }
 
   const directionEmoji = signal.direction === "long" ? "🟢 LONG" : "🔴 SHORT";
-  const strategyLabels: Record<string, string> = {
-    ema_bounce: "EMA Bounce",
-    macd_cross: "MACD Cross",
-    rsi_reversal: "RSI Reversal",
-    bollinger_breakout: "Bollinger Breakout",
-  };
+  const confluenceEmoji = signal.confluenceLevel === "confluence" ? "🔥🔥🔥🔥" : "🔥🔥🔥";
+  const confluenceText = signal.confluenceLevel === "confluence" ? "FULL CONFLUENCE (4/4)" : "STRONG CONFLUENCE (3/4)";
 
   const message = `
+${confluenceEmoji} *${confluenceText}*
+
 📊 *BTC Trade Signal*
 
 ${directionEmoji}
 
-*Strategy:* ${strategyLabels[signal.strategy] || signal.strategy}
+*Aligned Strategies:* ${signal.alignedStrategies.join(", ")}
 *Confidence:* ${signal.confidence}%
 
 💰 *Entry:* $${signal.entryPrice.toLocaleString()}
@@ -295,7 +354,8 @@ ${directionEmoji}
 
 ⏱️ *Max Hold:* ${MAX_HOLDING_PERIOD_CANDLES} candles (${MAX_HOLDING_PERIOD_CANDLES}h)
 
-📝 *Reason:* ${signal.reason}
+📝 *Analysis:*
+${signal.reason}
 
 ⏰ ${new Date().toUTCString()}
 `.trim();
@@ -322,6 +382,7 @@ ${directionEmoji}
     return false;
   }
 }
+
 
 // Send Telegram notification for expired trade
 async function sendExpiredTradeNotification(
