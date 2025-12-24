@@ -8,31 +8,21 @@ interface ActiveSignalCardProps {
   signal: StoredSignal;
 }
 
-const strategyLabels: Record<StoredSignal["strategy"], string> = {
-  ema_bounce: "EMA Bounce",
-  macd_cross: "MACD Cross",
-  rsi_reversal: "RSI Reversal",
-  bollinger_breakout: "BB Breakout",
-};
-
-const strategyIcons: Record<StoredSignal["strategy"], string> = {
-  ema_bounce: "📈",
-  macd_cross: "📊",
-  rsi_reversal: "🔄",
-  bollinger_breakout: "💥",
+const getConfluenceInfo = (confidence: number) => {
+  if (confidence >= 95) {
+    return { label: "FULL CONFLUENCE", icon: "🔥🔥🔥🔥", strategies: 4, color: "bg-chart-bullish text-chart-bullish-foreground" };
+  }
+  if (confidence >= 85) {
+    return { label: "STRONG CONFLUENCE", icon: "🔥🔥🔥", strategies: 3, color: "bg-primary text-primary-foreground" };
+  }
+  return null;
 };
 
 export function ActiveSignalCard({ signal }: ActiveSignalCardProps) {
   const isLong = signal.direction === "long";
   const directionBg = isLong ? "bg-bullish/10 border-bullish/20" : "bg-bearish/10 border-bearish/20";
   
-  // Detect confluence from reason text
-  const isConfluence = signal.reason.includes("CONFLUENCE");
-  const isFullConfluence = signal.reason.includes("4/4");
-  const isStrongConfluence = signal.reason.includes("3/4");
-  
-  // Map confidence number to label
-  const confidenceLabel = signal.confidence >= 80 ? "high" : signal.confidence >= 60 ? "medium" : "low";
+  const confluenceInfo = getConfluenceInfo(signal.confidence);
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -44,32 +34,32 @@ export function ActiveSignalCard({ signal }: ActiveSignalCardProps) {
   };
 
   return (
-    <Card className={`border ${directionBg} backdrop-blur animate-slide-up ${isConfluence ? "ring-2 ring-primary/50" : ""}`}>
+    <Card className={`border ${directionBg} backdrop-blur animate-slide-up ${confluenceInfo ? "ring-2 ring-primary/50" : ""}`}>
       <CardHeader className="pb-2">
         <div className="flex flex-col gap-2">
           {/* Confluence Badge */}
-          {isConfluence && (
+          {confluenceInfo && (
             <div className="flex items-center gap-2">
               <Badge 
                 variant="default" 
-                className={`${isFullConfluence ? "bg-primary text-primary-foreground" : "bg-primary/80 text-primary-foreground"}`}
+                className={confluenceInfo.color}
               >
-                {isFullConfluence ? "🔥🔥🔥🔥 FULL CONFLUENCE" : "🔥🔥🔥 STRONG CONFLUENCE"}
+                {confluenceInfo.icon} {confluenceInfo.label}
               </Badge>
             </div>
           )}
           
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="text-lg">{strategyIcons[signal.strategy]}</span>
+              <span className="text-lg">{confluenceInfo ? "📊" : "📈"}</span>
               <CardTitle className="text-sm font-medium">
-                {isConfluence ? `${isFullConfluence ? "4" : "3"} Strategies Aligned` : strategyLabels[signal.strategy]}
+                {confluenceInfo ? `${confluenceInfo.strategies} Strategies Aligned` : "Signal"}
               </CardTitle>
             </div>
             <div className="flex items-center gap-2">
               <Badge 
                 variant="outline" 
-                className={`${confidenceLabel === "high" ? "border-primary/50 text-primary" : "border-muted-foreground/50 text-muted-foreground"}`}
+                className="border-primary/50 text-primary"
               >
                 {signal.confidence}%
               </Badge>
