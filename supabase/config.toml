@@ -2,3 +2,6 @@ project_id = "mwpoiakaatjtonwxzlra"
 
 [functions.signal-scanner]
 verify_jwt = false
+
+[functions.binance-data]
+verify_jwt = false
